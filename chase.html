@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Charizard's Chase – WebGL Mini‑Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: monospace; }
+        canvas { display: block; }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.6);
+            padding: 8px;
+            border-radius: 4px;
+            pointer-events: none;
+        }
+        #msg {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-size: 2em;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        Speed: <span id="speed">0.00</span><br>
+        Altitude: <span id="altitude">3.00</span>
+    </div>
+    <div id="msg"></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // ─────────────────────────────────────
+        // 1. SCENE, CAMERA, RENDERER
+        // ─────────────────────────────────────
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.Fog(0x87CEEB, 50, 150);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(0, 5, -8);
+
+        // ─────────────────────────────────────
+        // 2. LIGHTING (Phong + Shadows)
+        // ─────────────────────────────────────
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        sunLight.position.set(30, 50, 20);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 1024;
+        sunLight.shadow.mapSize.height = 1024;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 200;
+        sunLight.shadow.camera.left = -40;
+        sunLight.shadow.camera.right = 40;
+        sunLight.shadow.camera.top = 40;
+        sunLight.shadow.camera.bottom = -40;
+        scene.add(sunLight);
+        scene.add(new THREE.AmbientLight(0x404040));
+
+        const fireLight = new THREE.PointLight(0xff6600, 3, 8);
+        scene.add(fireLight);
+
+        // ─────────────────────────────────────
+        // 3. POST‑PROCESSING (Bloom)
+        // ─────────────────────────────────────
+        const renderPass = new RenderPass(scene, camera);
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            0.8, 0.4, 0.85
+        );
+        bloomPass.renderToScreen = true;
+        const composer = new EffectComposer(renderer);
+        composer.addPass(renderPass);
+        composer.addPass(bloomPass);
+
+        // ─────────────────────────────────────
+        // 4. TERRAIN & OBSTACLES
+        // ─────────────────────────────────────
+        const ground = new THREE.Mesh(
+            new THREE.PlaneGeometry(200, 200),
+            new THREE.MeshToonMaterial({ color: 0x4caf50 })
+        );
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        const obstacles = [];
+        const rockGeo = new THREE.ConeGeometry(1, 2, 6);
+        const rockMat = new THREE.MeshToonMaterial({ color: 0x8B4513 });
+        const treeGeo = new THREE.CylinderGeometry(0.3, 0.3, 2.5, 8);
+        const treeMat = new THREE.MeshToonMaterial({ color: 0x2E8B57 });
+
+        function spawnObstacle(x, z) {
+            const isTree = Math.random() < 0.5;
+            const mesh = new THREE.Mesh(isTree ? treeGeo : rockGeo, isTree ? treeMat : rockMat);
+            mesh.position.set(x, 1.25, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+            return mesh;
+        }
+
+        for (let i = 0; i < 30; i++) {
+            obstacles.push(spawnObstacle(
+                (Math.random() - 0.5) * 80,
+                (Math.random() - 0.5) * 80
+            ));
+        }
+
+        // ─────────────────────────────────────
+        // 5. CHARACTERS (placeholder cubes)
+        // ─────────────────────────────────────
+        const toonOrange = new THREE.MeshToonMaterial({ color: 0xff8c00 });
+        const toonBlue = new THREE.MeshToonMaterial({ color: 0x1E90FF });
+
+        // Charizard (orange cube, long side = Z axis = forward)
+        const charizard = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.BoxGeometry(1, 1.2, 1.8), toonOrange);
+        body.castShadow = true;
+        body.receiveShadow = true;
+        charizard.add(body);
+
+        // wings
+        const wingGeo = new THREE.PlaneGeometry(1.5, 0.8);
+        const wingMat = new THREE.MeshToonMaterial({ color: 0xff4500, side: THREE.DoubleSide });
+        const leftWing = new THREE.Mesh(wingGeo, wingMat);
+        leftWing.position.set(-0.9, 0.2, 0);
+        leftWing.rotation.y = Math.PI / 2;
+        leftWing.rotation.z = -0.3;
+        leftWing.castShadow = true;
+        charizard.add(leftWing);
+        const rightWing = new THREE.Mesh(wingGeo, wingMat);
+        rightWing.position.set(0.9, 0.2, 0);
+        rightWing.rotation.y = -Math.PI / 2;
+        rightWing.rotation.z = 0.3;
+        rightWing.castShadow = true;
+        charizard.add(rightWing);
+
+        // tail flame (glows with bloom)
+        const flame = new THREE.Mesh(
+            new THREE.SphereGeometry(0.25, 16, 16),
+            new THREE.MeshToonMaterial({ color: 0xff5500, emissive: 0xff2200 })
+        );
+        flame.position.set(0, -0.3, -1.1);
+        flame.castShadow = false;
+        charizard.add(flame);
+
+        scene.add(charizard);
+
+        // Murkrow (blue sphere placeholder)
+        const murkrow = new THREE.Group();
+        const crowBody = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 16), toonBlue);
+        crowBody.castShadow = true;
+        murkrow.add(crowBody);
+        murkrow.position.set(0, 4, 10); // start ahead of charizard
+        scene.add(murkrow);
+
+        // Lighter (attached to Murkrow)
+        const lighter = new THREE.Mesh(
+            new THREE.BoxGeometry(0.2, 0.2, 0.4),
+            new THREE.MeshToonMaterial({ color: 0xFFD700 })
+        );
+        lighter.position.set(0.3, 0.3, 0.6);
+        murkrow.add(lighter);
+
+        // ─────────────────────────────────────
+        // 6. GAME STATE & CONTROLS
+        // ─────────────────────────────────────
+        const keys = {};
+        window.addEventListener('keydown', e => (keys[e.key.toLowerCase()] = true, e.preventDefault()));
+        window.addEventListener('keyup',   e => (keys[e.key.toLowerCase()] = false, e.preventDefault()));
+
+        const state = {
+            yaw: 0, pitch: 0, roll: 0,
+            speed: 5.0,
+            maxSpeed: 20, minSpeed: 2,
+            rotationSpeed: 2.5,
+            gameOver: false,
+            retrievedLighter: false,
+        };
+
+        // ─────────────────────────────────────
+        // 7. CORE FIX: Forward vector is +Z
+        // ─────────────────────────────────────
+        function getCharizardForward() {
+            // The model’s long body faces +Z when rotation = (0,0,0)
+            return new THREE.Vector3(0, 0, 1).applyQuaternion(charizard.quaternion);
+        }
+
+        // ─────────────────────────────────────
+        // 8. GAME LOOP
+        // ─────────────────────────────────────
+        const clock = new THREE.Clock();
+        let murkrowTimer = 0;
+
+        function update(dt) {
+            if (state.gameOver) return;
+
+            // --- controls ---
+            let dYaw = 0, dPitch = 0, dRoll = 0;
+            if (keys['a']) dYaw += state.rotationSpeed * dt;
+            if (keys['d']) dYaw -= state.rotationSpeed * dt;
+            if (keys['w']) dPitch += state.rotationSpeed * dt;
+            if (keys['s']) dPitch -= state.rotationSpeed * dt;
+            if (keys['q']) dRoll -= state.rotationSpeed * dt;
+            if (keys['e']) dRoll += state.rotationSpeed * dt;
+
+            state.yaw += dYaw;
+            state.pitch = Math.max(-0.8, Math.min(0.8, state.pitch + dPitch));
+            state.roll += dRoll;
+            if (keys['arrowup']) state.speed = Math.min(state.maxSpeed, state.speed + 5 * dt);
+            if (keys['arrowdown']) state.speed = Math.max(state.minSpeed, state.speed - 5 * dt);
+
+            // apply orientation
+            charizard.rotation.order = 'YXZ';
+            charizard.rotation.y = state.yaw;
+            charizard.rotation.x = state.pitch;
+            charizard.rotation.z = state.roll;
+
+            // --- corrected movement ---
+            const forward = getCharizardForward();
+            charizard.position.addScaledVector(forward, state.speed * dt);
+            charizard.position.y = Math.max(1.5, Math.min(10, charizard.position.y)); // altitude clamp
+
+            // update fire light position
+            fireLight.position.copy(charizard.position).add(
+                new THREE.Vector3(0, 0.5, 0).addScaledVector(forward, 1.2)
+            );
+
+            // --- Murkrow AI: stay ahead of Charizard in world space ---
+            if (!state.retrievedLighter) {
+                murkrowTimer += dt;
+                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(charizard.quaternion);
+                const aheadDistance = 8;
+                const lateralOffset = Math.sin(murkrowTimer * 2) * 5;
+                const verticalOffset = 2 + Math.cos(murkrowTimer * 1.5) * 1.5;
+
+                const targetWorld = charizard.position.clone()
+                    .addScaledVector(forward, aheadDistance)
+                    .addScaledVector(right, lateralOffset)
+                    .add(new THREE.Vector3(0, verticalOffset, 0));
+
+                murkrow.position.lerp(targetWorld, 0.05);
+                murkrow.lookAt(charizard.position); // Murkrow faces you cheekily
+            }
+
+            // --- collision with obstacles ---
+            const playerBox = new THREE.Box3().setFromObject(charizard);
+            for (const obs of obstacles) {
+                if (playerBox.intersectsBox(new THREE.Box3().setFromObject(obs))) {
+                    state.gameOver = true;
+                    document.getElementById('msg').textContent = 'YOU CRASHED! Refresh to try again.';
+                    return;
+                }
+            }
+
+            // --- catching Murkrow ---
+            if (!state.retrievedLighter && charizard.position.distanceTo(murkrow.position) < 1.8) {
+                state.retrievedLighter = true;
+                document.getElementById('msg').textContent = 'Got the lighter! (Wait for it...)';
+                setTimeout(() => {
+                    document.getElementById('msg').textContent = 'Charizard uses its own flame anyway! 🔥';
+                    flame.scale.set(2, 2, 2); // humorous ending
+                }, 2000);
+            }
+
+            // --- obstacle recycling (pop ahead of player) ---
+            const recycleRadius = 40;
+            obstacles.forEach(obs => {
+                if (charizard.position.distanceTo(obs.position) > 60) {
+                    const angle = Math.random() * Math.PI * 2;
+                    // Place obstacle ahead of player, not randomly around
+                    const baseDir = forward.clone();
+                    const perp = new THREE.Vector3(-baseDir.z, 0, baseDir.x).normalize(); // rough perpendicular
+                    const ahead = baseDir.clone().multiplyScalar(25 + Math.random() * 15);
+                    const side = perp.clone().multiplyScalar((Math.random() - 0.5) * 30);
+                    const newPos = charizard.position.clone().add(ahead).add(side);
+                    newPos.y = 0; // ground
+                    obs.position.copy(newPos);
+                }
+            });
+
+            // --- chase camera ---
+            const behindOffset = new THREE.Vector3(0, 3, -6); // -Z is behind because forward is +Z
+            const lookAheadOffset = new THREE.Vector3(0, 1, 2);
+            const camTargetPos = charizard.position.clone()
+                .add(behindOffset.applyQuaternion(charizard.quaternion));
+            const camLookAt = charizard.position.clone()
+                .add(lookAheadOffset.applyQuaternion(charizard.quaternion));
+            camera.position.lerp(camTargetPos, 0.1);
+            camera.lookAt(camLookAt);
+
+            // --- HUD ---
+            document.getElementById('speed').textContent = state.speed.toFixed(1);
+            document.getElementById('altitude').textContent = charizard.position.y.toFixed(1);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.1);
+            update(dt);
+            composer.render();
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+        console.log('Charizard flies forward now! WASD + arrows to fly.');
+    </script>
+</body>
+</html>
