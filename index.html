@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Charizard's Chase – Save the Magikarp!</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: monospace; }
+        canvas { display: block; }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.6);
+            padding: 8px;
+            border-radius: 4px;
+            pointer-events: none;
+        }
+        #msg {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-size: 2em;
+            pointer-events: none;
+        }
+        #cutscene-title {
+            position: absolute;
+            top: 50%;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-size: 2.4em;
+            font-weight: bold;
+            text-shadow: 0 0 12px rgba(0,0,0,0.9);
+            transform: translateY(-50%);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.6s ease;
+        }
+        #fade {
+            position: absolute;
+            inset: 0;
+            background: black;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.6s ease;
+        }
+        #pause-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.72);
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+        }
+        #pause-overlay h1 {
+            color: white;
+            font-size: 3em;
+            margin: 0 0 10px;
+            letter-spacing: 4px;
+        }
+        .pause-btn {
+            width: 200px;
+            padding: 12px 0;
+            font-size: 1.2em;
+            font-family: monospace;
+            font-weight: bold;
+            border: 2px solid white;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .pause-btn:hover { background: rgba(255,255,255,0.25); }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <div id="hearts" style="font-size:1.4em; letter-spacing:3px; margin-bottom:4px;">❤️❤️❤️</div>
+        Speed: <span id="speed">0.00</span><br>
+        Altitude: <span id="altitude">3.00</span><br>
+        <div style="margin-top:6px; font-size:0.85em;">
+            BOOST <span id="boost-pct">0%</span>
+            &nbsp;[<span style="color:#0af">SHIFT</span>]
+            <span id="boost-ready" style="color:#0f0; display:none;"> ✓</span>
+        </div>
+        <div style="margin-top:3px; width:120px; height:10px;
+                    background:rgba(255,255,255,0.2); border-radius:5px; overflow:hidden;">
+            <div id="boost-bar"
+                 style="height:100%; width:0%; background:#00ccff;
+                        border-radius:5px; transition:width 0.1s;"></div>
+        </div>
+        <div style="margin-top:4px; font-size:0.75em; color:#FFD700;">
+            ● Collect coins — use any amount
+        </div>
+    </div>
+    <div id="msg"></div>
+    <div id="cutscene-title"></div>
+    <div id="fade"></div>
+    <div id="pause-overlay">
+        <h1>⏸ PAUSED</h1>
+        <button class="pause-btn" id="btn-resume">▶ Resume</button>
+        <button class="pause-btn" id="btn-retry">↺ Retry</button>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module" src="js/game.js"></script>
+</body>
+</html>

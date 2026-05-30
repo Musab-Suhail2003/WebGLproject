@@ -1,0 +1,227 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2cm]{geometry}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{parskip}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{float}
+
+% ── Page style ────────────────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small CSE352 Computer Graphics}
+\chead{\small \textit{Project Progress Report}}
+\rhead{\small Spring 2026}
+\cfoot{\small Page \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ── Section formatting ────────────────────────────────────────────────────────
+\titleformat{\section}{\normalfont\large\bfseries}{}{0em}{}[\titlerule]
+\titlespacing{\section}{0pt}{10pt}{4pt}
+
+% ── Table column types ────────────────────────────────────────────────────────
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+% ── Title block ───────────────────────────────────────────────────────────────
+\begin{center}
+    {\LARGE\bfseries Charizard's Chase: A WebGL Mini-Game}\\[4pt]
+    {\large Musab Suhail \quad|\quad ERP: \texttt{XXXXX}}\\[2pt]
+    {\normalsize CSE352 Computer Graphics\quad--\quad Spring 2026}\\[2pt]
+    {\normalsize \textbf{Project Direction:} Mini Game (Pokémon-inspired)}
+\end{center}
+
+\vspace{-4pt}\noindent\rule{\linewidth}{0.6pt}\vspace{6pt}
+
+% ── 1. Summary of Progress ────────────────────────────────────────────────────
+\section{Summary of Progress}
+
+The game is fully playable end-to-end with a complete narrative arc. Charizard
+is about to eat a Magikarp when Golbat swoops in and steals it; the player
+chases Golbat through an infinite procedural world and, on catching it, watches
+a closing cutscene where Charizard stands on top of Golbat and cooks the
+Magikarp with his own flame. Core gameplay features include a velocity-based
+Golbat AI with panic behaviour, a coin-collection boost system, a three-heart
+health system with invincibility frames, and a pause/retry menu. The world uses
+GLB rock and cloud assets, infinite ground scrolling, and mountains with tapered
+cone collision. All three advanced techniques --- toon shading, bloom, and
+shadow mapping --- are active and visible.
+
+% ── 2. Baseline Techniques ───────────────────────────────────────────────────
+\section{Baseline Techniques Status}
+
+\begin{tabular}{@{} L{3.5cm} L{2.2cm} L{8.8cm} @{}}
+\toprule
+\textbf{Technique} & \textbf{Status} & \textbf{Notes} \\
+\midrule
+Phong Lighting Model
+  & Completed
+  & \texttt{DirectionalLight} (sun) + \texttt{AmbientLight} + \texttt{PointLight}
+    (fire glow). During the outro cooking scene the point light intensity ramps
+    from 3 to 11 to simulate Charizard's flame heating the Magikarp. \\[4pt]
+Texture Mapping
+  & In Progress
+  & Grass diffuse texture (\texttt{grass\_diff\_1k.jpg}) acquired from Polyhaven;
+    application to the ground plane is pending. \\[4pt]
+Multiple Light Types
+  & Completed
+  & Three distinct types in simultaneous use: \texttt{DirectionalLight}
+    (sun/shadows), \texttt{AmbientLight} (fill), \texttt{PointLight}
+    (Charizard tail flame, repositioned every frame). \\[4pt]
+GLSL Shader Setup
+  & In Progress
+  & Three.js built-in shaders handle Phong + toon + bloom.
+    A custom GLSL toon-outline or ramp pass is planned for the final
+    submission. \\[4pt]
+Transformations \& Normals
+  & Completed
+  & Full YXZ Euler rotation (yaw/pitch/roll) for flight; correct shadow
+    normals via \texttt{PCFSoftShadowMap}; model and normal matrices
+    applied to all scene objects. \\[4pt]
+Camera System
+  & Completed
+  & Third-person chase cam during gameplay; scripted cinematic camera
+    (low-angle drift, swoop tracking, orbit) during intro and outro. \\
+\bottomrule
+\end{tabular}
+
+% ── 3. Advanced Techniques ───────────────────────────────────────────────────
+\section{Advanced Techniques Status}
+
+\textbf{Toon Shading (3/5) — Completed.}
+\texttt{MeshToonMaterial} is applied to all procedural scene geometry. All loaded
+GLB models (Charizard, Golbat, Magikarp, rocks, clouds) have their materials
+post-processed on load to \texttt{roughness = 1}, \texttt{metalness = 0}, and
+\texttt{envMapIntensity = 0}, enforcing a consistent flat, matte toon look across
+both procedural and imported assets.
+\textit{Challenge:} PBR materials from GLB exports clashed with the toon aesthetic.
+Resolved with a post-load \texttt{traverse} that overwrites material parameters.
+
+\medskip
+\textbf{Bloom (4/5) — Completed.}
+\texttt{EffectComposer} with \texttt{UnrealBloomPass} (strength 0.8, radius 0.4,
+threshold 0.85). The tail flame mesh uses an emissive colour so it glows through
+bloom. During the outro cooking scene the \texttt{PointLight} intensity is animated
+from 3 to 11, creating a visible bloom pulse as the flame ``cooks'' the Magikarp.
+\textit{Challenge:} Bloom overexposed toon shading at high strength. Balanced by
+lowering strength and raising threshold.
+
+\medskip
+\textbf{Shadow Mapping (4/5) — Completed.}
+\texttt{PCFSoftShadowMap} with a 1024\texttimes1024 depth map from the directional
+sun light; frustum manually sized (\(\pm40\) units). All characters, Magikarp, and
+obstacles cast shadows; the infinite ground plane receives them.
+\textit{Challenge:} Shadow acne at shallow sun angles mitigated by
+\texttt{PCFSoftShadowMap}'s built-in bias; manual \texttt{shadow.bias} tuning
+remains for the final submission.
+
+% ── 4. Screenshots ───────────────────────────────────────────────────────────
+\section{Screenshots / Renders}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.48\linewidth]{screenshot1}
+    \hfill
+    \includegraphics[width=0.48\linewidth]{screenshot2}
+    \\[6pt]
+    \includegraphics[width=0.48\linewidth]{screenshot3}
+\end{figure}
+
+% ── 5. Challenges ────────────────────────────────────────────────────────────
+\section{Challenges Encountered}
+
+A forward-vector orientation bug caused Charizard to fly sideways until a canonical
+\(+Z\) forward convention was established with quaternion-derived movement. Golbat's
+AI initially maintained a fixed offset regardless of player speed, making it
+uncatchable; this was replaced with a velocity-capped system so a boosted Charizard
+can genuinely close the gap. Tagging bounding-box collision against tall mountains
+caused phantom crashes far from the geometry; replaced with a per-type cylinder/tapered-cone check that matches each obstacle's visual shape. Attaching the tail
+flame to the animated tail bone has proven difficult because the GLB skeleton lives
+inside \texttt{SkinnedMesh.skeleton.bones} rather than the scene graph; a positional
+offset remains as an interim solution.
+
+% ── 6. Remaining Work ────────────────────────────────────────────────────────
+\section{Remaining Work}
+
+\begin{enumerate}[leftmargin=*, label=\arabic*.]
+    \item \textbf{Intro cutscene} \textit{(In Progress)} --- functional; camera
+          timing and model scale polish pending.
+    \item \textbf{Outro cutscene} \textit{(In Progress)} --- Charizard cooks
+          Magikarp on Golbat; functional, final polish pending.
+    \item Apply \texttt{grass\_diff\_1k.jpg} texture to ground plane with UV repeat
+    \item Load \texttt{kiara\_1\_dawn\_1k.hdr} as HDRI environment/background
+    \item Attach tail flame to Charizard's tail bone (replace positional offset)
+    \item Write at least one custom GLSL pass (toon outline or ramp shader)
+    \item Wire \texttt{tree.glb} into obstacle pool (currently procedural cylinders)
+    \item Fine-tune \texttt{shadow.bias} to eliminate remaining shadow acne
+    \item Performance pass: frustum culling / LOD for distant obstacles
+\end{enumerate}
+
+% ── 7. Scope Adjustments ─────────────────────────────────────────────────────
+\section{Scope Adjustments}
+
+\begin{tabular}{@{} L{4cm} L{10cm} @{}}
+\toprule
+\textbf{Change} & \textbf{Justification} \\
+\midrule
+Murkrow \(\rightarrow\) Golbat
+  & A suitably rigged Murkrow GLB was unavailable. Golbat fills the same
+    role and a quality asset was sourced. \\[4pt]
+Lighter/cigarette \(\rightarrow\) Magikarp
+  & Replaced the prop-theft premise with a food-theft premise for a more
+    visual and humorous payoff. Golbat steals Charizard's Magikarp; the
+    outro shows Charizard cooking it on Golbat's back. \\[4pt]
+Pikachu easter-egg deferred
+  & Feature remains planned but deprioritised in favour of completing the
+    narrative cutscenes and gameplay systems. \\[4pt]
+Codebase refactor
+  & Single-file \texttt{chase.html} split into nine ES modules. No
+    techniques added or removed. \\
+\bottomrule
+\end{tabular}
+
+\medskip
+\noindent Advanced technique effort scores are \textbf{unchanged}:
+Toon Shading 3/5 + Bloom 4/5 + Shadow Mapping 4/5 = \textbf{11/10} \checkmark
+\quad(satisfies combined $\geq$ 6/10 and at least one technique $\geq$ 3/5).
+
+% ── 8. External Assets Update ────────────────────────────────────────────────
+\section{External Assets Update}
+
+\begin{tabular}{@{} L{4.2cm} L{2.8cm} L{6.5cm} @{}}
+\toprule
+\textbf{Asset} & \textbf{Source} & \textbf{Credit / Link} \\
+\midrule
+Charizard flying animation GLB
+  & Sketchfab
+  & \url{https://skfb.ly/prsZz} \\[4pt]
+\texttt{charizard.glb} (standing)
+  & Sketchfab
+  & \url{https://skfb.ly/ouA78} \\[4pt]
+\texttt{golbat.glb}
+  & Sketchfab
+  & \url{https://skfb.ly/oPXDW} \\[4pt]
+\texttt{magikarp.glb}
+  & Sketchfab
+  & \url{https://skfb.ly/6ZXn9} \\[4pt]
+\texttt{grass\_diff\_1k.jpg}
+  & Polyhaven
+  & Polyhaven (CC0) \\[4pt]
+\texttt{kiara\_1\_dawn\_1k.hdr}
+  & Polyhaven
+  & Polyhaven (CC0) \\[4pt]
+\texttt{rock.glb, cloud.glb, tree.glb}
+  & Quaternius / itch.io
+  & Quaternius (CC0) \\
+\bottomrule
+\end{tabular}
+
+\end{document}
