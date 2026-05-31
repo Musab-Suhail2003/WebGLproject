@@ -66,6 +66,8 @@ function makeTree() {
     g.userData.type            = 'tree';
     g.userData.collisionRadius = 0.8;
     g.userData.collisionHeight = h + 3;
+    g.userData.trunkHeight     = h;   // needed to position GLB foliage
+    g.userData.proceduralTop   = top; // swapped out when tree.glb loads
     return g;
 }
 
@@ -231,7 +233,47 @@ export function loadWorldAssets() {
         });
     });
 
-    return Promise.all([loadRock, loadCloud]);
+    const loadTree = new Promise(resolve => {
+        loader.load('./models/tree.glb', gltf => {
+            const template = gltf.scene;
+            template.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    const old = child.material;
+                    child.material = new THREE.MeshToonMaterial({
+                        map:   old.map   ?? null,
+                        color: old.color ?? new THREE.Color(0x2d6a2d),
+                    });
+                    old.dispose();
+                }
+            });
+
+            obstacles.forEach(obs => {
+                if (obs.userData.type !== 'tree') return;
+                // Remove procedural cone top
+                if (obs.userData.proceduralTop) {
+                    obs.remove(obs.userData.proceduralTop);
+                    obs.userData.proceduralTop = null;
+                }
+                // Place GLB foliage at the top of the trunk
+                const clone = template.clone();
+                const h = obs.userData.trunkHeight;
+                clone.position.y = h;
+                clone.scale.setScalar(3.0 + Math.random() * 0.4);
+                clone.rotation.y = Math.random() * Math.PI * 2;
+                obs.add(clone);
+            });
+
+            console.log('tree.glb loaded — foliage upgraded');
+            resolve();
+        }, undefined, err => {
+            console.warn('tree.glb failed, keeping procedural tops', err);
+            resolve();
+        });
+    });
+
+    return Promise.all([loadRock, loadCloud, loadTree]);
 }
 
 // ── Per-frame updates ─────────────────────────────────────────────────────────

@@ -10,8 +10,8 @@ const titleEl = document.getElementById('cutscene-title');
 const fadeEl  = document.getElementById('fade');
 const hudEl   = document.getElementById('hud');
 
-function setTitle(text) { titleEl.textContent = text; titleEl.style.opacity = '1'; }
-function clearTitle()   { titleEl.style.opacity = '0'; }
+function setTitle(text) { titleEl.textContent = text; titleEl.classList.add('visible'); }
+function clearTitle()   { titleEl.classList.remove('visible'); }
 
 // ── Timeline ──────────────────────────────────────────────────────────────────
 const phases = [

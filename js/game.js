@@ -6,7 +6,7 @@ import { golbat, golbatVelocity, loadGolbat, updateGolbat } from './golbat.js';
 import { coins, updateCoins } from './coins.js';
 import { magikarp, loadMagikarp } from './magikarp.js';
 import { keys, state } from './controls.js';
-import { updateIntro } from './intro.js';
+import { updateIntro, resetIntro } from './intro.js';
 import { updateOutro, triggerOutro } from './outro.js';
 import { updateSludge, clearSludge } from './sludge.js';
 
@@ -119,7 +119,27 @@ function resetGame() {
 
 // ── Key & button listeners ────────────────────────────────────────────────────
 window.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && (phase === 'playing' || paused)) {
+    if (e.key !== 'Escape') return;
+
+    if (phase === 'intro') {
+        // Skip intro — clean up and jump straight to gameplay
+        resetIntro();
+        standingCharizard.visible = false;
+        charizard.visible = true;
+        charizard.position.set(0, 3, 0);
+        charizard.rotation.set(0, 0, 0);
+        state.yaw = 0; state.pitch = 0; state.roll = 0;
+        magikarp.visible = true;
+        elFade.style.transition = 'none';
+        elFade.style.opacity = '0';
+        elCutsceneTitle.classList.remove('visible');
+        elHud.style.display = '';
+        phase = 'playing';
+    } else if (phase === 'outro') {
+        // Skip outro — jump straight to win screen
+        phase = 'win';
+        showOverlay('🍽️ YOU WIN!', false);
+    } else if (phase === 'playing' || paused) {
         setPaused(!paused);
     }
 });
@@ -199,20 +219,33 @@ function updateGameplay(dt) {
     // Keep Golbat in a sensible altitude band — same ceiling as Charizard
     golbat.position.y = Math.max(2.5, Math.min(18, golbat.position.y));
 
-    // Push Golbat away from obstacles so it doesn't clip through them
+    // Push Golbat away from obstacles — velocity push + hard position correction
     for (const obs of obstacles) {
-        const { collisionRadius, collisionHeight } = obs.userData;
+        const { collisionRadius, collisionHeight, isMountain } = obs.userData;
         if (golbat.position.y > collisionHeight) continue;
         const odx = golbat.position.x - obs.position.x;
         const odz = golbat.position.z - obs.position.z;
         const odist = Math.sqrt(odx * odx + odz * odz);
-        const avoid = collisionRadius + 2.5;
-        if (odist < avoid && odist > 0) {
-            const push = (avoid - odist) * 4;
-            golbatVelocity.x += (odx / odist) * push * dt;
-            golbatVelocity.z += (odz / odist) * push * dt;
-            // Also nudge upward to fly over instead of into the obstacle
-            golbatVelocity.y += push * dt * 0.5;
+        const effR = isMountain
+            ? collisionRadius * (1 - golbat.position.y / collisionHeight)
+            : collisionRadius;
+        const avoid = effR + 2.0;
+        if (odist < avoid && odist > 0.01) {
+            const nx = odx / odist;
+            const nz = odz / odist;
+            // Hard correction — snap Golbat to the surface immediately
+            const penetration = avoid - odist;
+            golbat.position.x += nx * penetration;
+            golbat.position.z += nz * penetration;
+            // Cancel inward velocity component and add outward impulse
+            const inward = golbatVelocity.x * (-nx) + golbatVelocity.z * (-nz);
+            if (inward > 0) {
+                golbatVelocity.x += nx * inward;
+                golbatVelocity.z += nz * inward;
+            }
+            golbatVelocity.x += nx * 6;
+            golbatVelocity.z += nz * 6;
+            golbatVelocity.y += 3;
         }
     }
 
@@ -278,6 +311,14 @@ function updateGameplay(dt) {
                 ? collisionRadius * (1 - py / collisionHeight)
                 : collisionRadius;
             if (xzDist < effR + 0.4) {
+                // Push Charizard to the surface of the obstacle radially
+                const pushDist = effR + 0.6;
+                if (xzDist > 0.01) {
+                    charizard.position.x = obs.position.x + (dx / xzDist) * pushDist;
+                    charizard.position.z = obs.position.z + (dz / xzDist) * pushDist;
+                } else {
+                    charizard.position.x += pushDist;
+                }
                 state.hearts--;
                 updateHeartsHUD();
                 if (state.hearts <= 0) {
@@ -286,8 +327,6 @@ function updateGameplay(dt) {
                     showOverlay('💀 GAME OVER', false);
                     return;
                 }
-                // Brief knockback + invincibility window
-                charizard.position.addScaledVector(forward, -2);
                 state.invincible      = true;
                 state.invincibleTimer = 0;
                 break;

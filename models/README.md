@@ -4,7 +4,7 @@
     |  |  |─ source
     |  |    |─ Charzard Flying.glb
     |  |    |─ textures
-    |  |       |- **texture-files/png's**
+    |  |       |- **texture-files/.png's for charizards flying model**
     │  ├─ charizard.glb        — standing model (intro + outro)
     │  ├─ golbat.glb
     │  ├─ magikarp.glb
