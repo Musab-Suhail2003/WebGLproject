@@ -1,5 +1,7 @@
-models/
-textures/
+models/*
+!models/README.md
+textures/*
+!textures/README.md
 context.txt
 Suhail_ERP_Progress*
 suhail_musab_proposal.pdf
