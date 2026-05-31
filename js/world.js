@@ -3,20 +3,25 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { scene } from './scene.js';
 
 // ── Tuning ────────────────────────────────────────────────────────────────────
-const OBSTACLE_COUNT = 80;
+const OBSTACLE_COUNT = 130;
 const RECYCLE_DIST   = 80;
-const SPAWN_NEAR     = 30;
-const SPAWN_FAR      = 60;
-const SPREAD         = 40;
+const SPAWN_NEAR     = 20;
+const SPAWN_FAR      = 55;
+const SPREAD         = 50;
 const GROUND_HALF    = 300;
 const CLOUD_COUNT    = 20;
 const ROCK_SCALE     = 1.0;   // tweak if rock.glb is wrong size
 const CLOUD_SCALE    = 1.0;   // tweak if cloud.glb is wrong size
 
 // ── Infinite ground ───────────────────────────────────────────────────────────
+const GRASS_REPEAT = 80;
+const grassTex = new THREE.TextureLoader().load('./textures/grass_diff_1k.jpg');
+grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping;
+grassTex.repeat.set(GRASS_REPEAT, GRASS_REPEAT);
+
 const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(GROUND_HALF * 2, GROUND_HALF * 2),
-    new THREE.MeshToonMaterial({ color: 0x4caf50 })
+    new THREE.MeshToonMaterial({ map: grassTex, color: 0x7ecb52 })
 );
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
@@ -25,6 +30,9 @@ scene.add(ground);
 export function updateGround(playerPos) {
     ground.position.x = playerPos.x;
     ground.position.z = playerPos.z;
+    // Counter-offset the texture so it stays anchored to world space
+    grassTex.offset.x =  (playerPos.x * GRASS_REPEAT) / (GROUND_HALF * 2);
+    grassTex.offset.y = -(playerPos.z * GRASS_REPEAT) / (GROUND_HALF * 2);
 }
 
 // ── Procedural geometry (fallbacks) ──────────────────────────────────────────

@@ -8,6 +8,7 @@ import { magikarp, loadMagikarp } from './magikarp.js';
 import { keys, state } from './controls.js';
 import { updateIntro } from './intro.js';
 import { updateOutro, triggerOutro } from './outro.js';
+import { updateSludge, clearSludge } from './sludge.js';
 
 // ── Golbat AI constants ───────────────────────────────────────────────────────
 const GOLBAT_FLEE_SPEED  = 10;  // comfortable cruising away from Charizard
@@ -28,22 +29,47 @@ const elAltitude     = document.getElementById('altitude');
 const elBoostPct     = document.getElementById('boost-pct');
 const elBoostBar     = document.getElementById('boost-bar');
 const elBoostReady   = document.getElementById('boost-ready');
-const elHearts       = document.getElementById('hearts');
-const elMsg          = document.getElementById('msg');
-const elHud          = document.getElementById('hud');
-const elPauseOverlay = document.getElementById('pause-overlay');
-const elFade         = document.getElementById('fade');
+const elHearts        = document.getElementById('hearts');
+const elMsg           = document.getElementById('msg');
+const elHud           = document.getElementById('hud');
+const elPauseOverlay  = document.getElementById('pause-overlay');
+const elPauseTitle    = document.getElementById('pause-title');
+const elBtnResume     = document.getElementById('btn-resume');
+const elFade          = document.getElementById('fade');
 const elCutsceneTitle = document.getElementById('cutscene-title');
+const elLoading       = document.getElementById('loading');
+const elCompassRing   = document.getElementById('compass-ring');
 
 function updateHeartsHUD() {
-    elHearts.textContent = '❤️'.repeat(state.hearts) + '🖤'.repeat(state.maxHearts - state.hearts);
+    let html = '';
+    for (let i = 0; i < state.maxHearts; i++) {
+        if (state.hearts >= i + 1)
+            html += '<span class="heart heart-full">♥</span>';
+        else if (state.hearts >= i + 0.5)
+            html += '<span class="heart heart-half">♥</span>';
+        else
+            html += '<span class="heart heart-empty">♥</span>';
+    }
+    elHearts.innerHTML = html;
 }
 
 // ── Pause / resume ────────────────────────────────────────────────────────────
+function showOverlay(title, showResume) {
+    elPauseTitle.textContent        = title;
+    elBtnResume.style.display       = showResume ? '' : 'none';
+    elPauseOverlay.style.display    = 'flex';
+    paused = true;
+    clock.getDelta();
+}
+
+function hideOverlay() {
+    elPauseOverlay.style.display = 'none';
+    paused = false;
+}
+
 function setPaused(val) {
-    paused = val;
-    elPauseOverlay.style.display = val ? 'flex' : 'none';
-    if (val) clock.getDelta(); // drain accumulated delta so resume doesn't jump
+    if (val) showOverlay('⏸ PAUSED', true);
+    else     hideOverlay();
 }
 
 // ── Reset / retry (skipIntro = true jumps straight to playing) ────────────────
@@ -61,6 +87,8 @@ function resetGame() {
 
     golbatTimer = 0;
     golbatVelocity.set(0, 0, 0);
+    clearSludge();
+    elCompassRing.style.display = 'none';
 
     // Reset Charizard
     charizard.visible = true;
@@ -194,6 +222,33 @@ function updateGameplay(dt) {
     magikarp.position.copy(golbat.position).add(new THREE.Vector3(0, -0.4, 0.5));
     magikarp.rotation.z = Math.PI * 0.08 + Math.sin(golbatTimer * 4) * 0.12; // flop
 
+    // ── Sludge bombs ──────────────────────────────────────────────────────────
+    const sludgeHit = updateSludge(golbat.position, charizard.position, dt, state.invincible);
+    if (sludgeHit) {
+        state.hearts = Math.max(0, state.hearts - 0.5);
+        updateHeartsHUD();
+        if (state.hearts <= 0) {
+            state.gameOver = true;
+            phase = 'gameover';
+            showOverlay('💀 GAME OVER', false);
+            return;
+        }
+        state.invincible      = true;
+        state.invincibleTimer = 0;
+    }
+
+    // ── Golbat compass ────────────────────────────────────────────────────────
+    {
+        const ndc = golbat.position.clone().project(camera);
+        const sx = ndc.z < 1 ?  ndc.x : -ndc.x;
+        const sy = ndc.z < 1 ?  ndc.y : -ndc.y;
+        const angle = Math.atan2(sx, sy); // clockwise from screen-up
+        // Rotate the div around its bottom-centre (transform-origin: 50% 120px)
+        elCompassRing.style.transform = `translateX(-50%) rotate(${angle}rad)`;
+        const onScreen = ndc.z < 1 && Math.abs(ndc.x) < 0.6 && Math.abs(ndc.y) < 0.6;
+        elCompassRing.style.display = onScreen ? 'none' : '';
+    }
+
     // ── Coins → boost ─────────────────────────────────────────────────────────
     const gained = updateCoins(charizard.position, dt);
     if (gained > 0) {
@@ -228,8 +283,7 @@ function updateGameplay(dt) {
                 if (state.hearts <= 0) {
                     state.gameOver = true;
                     phase = 'gameover';
-                    elMsg.textContent = '💀 Game Over!';
-                    setPaused(true);
+                    showOverlay('💀 GAME OVER', false);
                     return;
                 }
                 // Brief knockback + invincibility window
@@ -293,7 +347,12 @@ function animate() {
     } else if (phase === 'playing') {
         updateGameplay(dt);
     } else if (phase === 'outro') {
-        updateOutro(dt);
+        elCompassRing.style.display = 'none';
+        const won = updateOutro(dt);
+        if (won) {
+            phase = 'win';
+            showOverlay('🍽️ YOU WIN!', false);
+        }
     }
 
     composer.render();
@@ -301,6 +360,7 @@ function animate() {
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 Promise.all([loadCharizard(), loadStandingCharizard(), loadGolbat(), loadMagikarp(), loadWorldAssets()]).then(() => {
+    elLoading.style.display = 'none';
+    updateHeartsHUD();
     animate();
-    console.log('Ready — WASD steer | ↑↓ speed | SHIFT boost (collect coins to charge)');
 });

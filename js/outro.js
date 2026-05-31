@@ -9,7 +9,6 @@ import { obstacles } from './world.js';
 const titleEl = document.getElementById('cutscene-title');
 const fadeEl  = document.getElementById('fade');
 const hudEl   = document.getElementById('hud');
-const msgEl   = document.getElementById('msg');
 
 function setTitle(text) { titleEl.textContent = text; titleEl.style.opacity = '1'; }
 function clearTitle()   { titleEl.style.opacity = '0'; }
@@ -22,7 +21,6 @@ const phases = [
         start: 0, end: 0.8,
         onEnter() {
             hudEl.style.display = 'none';
-            msgEl.textContent   = '';
             setTitle('Got it! 🎉');
             // Freeze Golbat with Magikarp still attached
             magikarp.visible = true;
@@ -46,7 +44,7 @@ const phases = [
         update(t) {
             const ease = t * t * (3 - 2 * t);
             // Golbat descends so its bottom edge sits at y=0
-            golbat.position.y = THREE.MathUtils.lerp(this._startGolbatY, golbatHalfHeight, ease);
+            golbat.position.y = THREE.MathUtils.lerp(this._startGolbatY, golbatHalfHeight/4, ease);
             magikarp.position.copy(golbat.position).add(new THREE.Vector3(0, -0.4, 0.5));
             // Orbit camera
             const angle  = t * Math.PI;
@@ -135,14 +133,10 @@ const phases = [
         onExit() { clearTitle(); },
     },
 
-    // 6.2 → 7.0 s : black screen — show replay prompt
+    // 6.2 → 7.0 s : hold on black screen before win overlay appears
     {
         start: 6.2, end: 7.0,
-        onEnter() {
-            fadeEl.style.opacity = '1';
-            msgEl.textContent    = 'Refresh to play again';
-            msgEl.style.fontSize = '1.4em';
-        },
+        onEnter() { fadeEl.style.opacity = '1'; },
         update() {},
     },
 ];

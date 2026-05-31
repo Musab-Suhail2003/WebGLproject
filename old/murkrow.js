@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { scene } from './scene.js';
+import { scene } from '../js/scene.js';
 
 export const murkrow = new THREE.Group();
 

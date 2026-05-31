@@ -51,12 +51,12 @@ export function loadCharizard() {
                     if (child.isMesh) {
                         child.castShadow = true;
                         child.receiveShadow = true;
-                        const mat = child.material;
-                        if (mat) {
-                            mat.roughness = 1.0;
-                            mat.metalness = 0.0;
-                            mat.envMapIntensity = 0;
-                        }
+                        const old = child.material;
+                        child.material = new THREE.MeshToonMaterial({
+                            map:   old.map   ?? null,
+                            color: old.color ?? new THREE.Color(0xff8c00),
+                        });
+                        old.dispose();
                     }
                 });
                 charizard.add(model);
@@ -121,11 +121,12 @@ export function loadStandingCharizard() {
                     if (child.isMesh) {
                         child.castShadow = true;
                         child.receiveShadow = true;
-                        if (child.material) {
-                            child.material.roughness = 1.0;
-                            child.material.metalness = 0.0;
-                            child.material.envMapIntensity = 0;
-                        }
+                        const old = child.material;
+                        child.material = new THREE.MeshToonMaterial({
+                            map:   old.map   ?? null,
+                            color: old.color ?? new THREE.Color(0xff8c00),
+                        });
+                        old.dispose();
                     }
                 });
                 standingCharizard.add(model);
