@@ -103,8 +103,9 @@ export function loadCharizard() {
 }
 
 // The model's long axis faces +Z, so forward is +Z in local space
+const _fwdScratch = new THREE.Vector3();
 export function getCharizardForward() {
-    return new THREE.Vector3(0, 0, 1).applyQuaternion(charizard.quaternion);
+    return _fwdScratch.set(0, 0, 1).applyQuaternion(charizard.quaternion);
 }
 
 // Loads the static standing model used in the intro cutscene

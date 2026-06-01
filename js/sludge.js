@@ -9,22 +9,22 @@ const MAX_LIFE      = 10;
 const bombs    = [];
 let fireTimer  = 4.0; // first shot after 4 s
 
+// Shared geometry and materials — allocated once, reused by every bomb
+const blobGeo = new THREE.SphereGeometry(0.55, 12, 12);
+const ringGeo = new THREE.TorusGeometry(0.75, 0.12, 8, 24);
+const blobMat = new THREE.MeshToonMaterial({ color: 0x7700cc, emissive: 0x550099 });
+const ringMat = new THREE.MeshToonMaterial({ color: 0xcc44ff, emissive: 0xaa22ff });
+
 function makeBomb(origin) {
     const group = new THREE.Group();
     group.position.copy(origin);
 
     // Blob — sphere so it's visible from any angle
-    const blob = new THREE.Mesh(
-        new THREE.SphereGeometry(0.55, 12, 12),
-        new THREE.MeshToonMaterial({ color: 0x7700cc, emissive: 0x550099 })
-    );
+    const blob = new THREE.Mesh(blobGeo, blobMat);
     group.add(blob);
 
     // Outer glow ring (always faces camera via world-Y rotation each frame)
-    const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(0.75, 0.12, 8, 24),
-        new THREE.MeshToonMaterial({ color: 0xcc44ff, emissive: 0xaa22ff })
-    );
+    const ring = new THREE.Mesh(ringGeo, ringMat);
     group.add(ring);
 
     // Purple point light for aura

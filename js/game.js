@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { scene, camera, composer, fireLight } from './scene.js';
 import { obstacles, recycleObstacles, updateGround, updateClouds, loadWorldAssets } from './world.js';
-import { charizard, flame, loadCharizard, loadStandingCharizard, getCharizardForward, updateAnimation } from './charizard.js';
+import { charizard, standingCharizard, flame, loadCharizard, loadStandingCharizard, getCharizardForward, updateAnimation } from './charizard.js';
 import { golbat, golbatVelocity, loadGolbat, updateGolbat } from './golbat.js';
-import { coins, updateCoins } from './coins.js';
+import { coins, updateCoins, resetCoins } from './coins.js';
 import { magikarp, loadMagikarp } from './magikarp.js';
 import { pikachu, pikachuRiding, loadpikachu } from './pikachu.js';
 import { keys, state } from './controls.js';
@@ -17,12 +17,25 @@ const GOLBAT_PANIC_SPEED = 14;  // when Charizard closes within PANIC_DIST
 const GOLBAT_PANIC_DIST  = 10;
 const GOLBAT_ACCEL       = 9;   // how fast Golbat adjusts its velocity
 
+// Squared-distance culling radii for collision loops — obstacles beyond this
+// distance cannot possibly overlap, so skip them before computing sqrt
+const GOLBAT_CULL_SQ    = 15 * 15;
+const CHARIZARD_CULL_SQ = 15 * 15;
+
 // ── Phase & pause ─────────────────────────────────────────────────────────────
 let phase  = 'intro';
 let paused = false;
 
 const clock     = new THREE.Clock();
 let golbatTimer = 0;
+
+// Scratch vectors — reused every frame to avoid GC pressure
+const _tmpV1 = new THREE.Vector3();
+const _tmpV2 = new THREE.Vector3();
+const _tmpV3 = new THREE.Vector3();
+const _tmpV4 = new THREE.Vector3();
+const _tmpV5 = new THREE.Vector3();
+const _tmpV6 = new THREE.Vector3();
 
 // ── HUD elements (cached) ─────────────────────────────────────────────────────
 const elSpeed        = document.getElementById('speed');
@@ -89,6 +102,7 @@ function resetGame() {
     golbatTimer = 0;
     golbatVelocity.set(0, 0, 0);
     clearSludge();
+    resetCoins();
     elCompassRing.style.display = 'none';
 
     // Reset models
@@ -104,7 +118,7 @@ function resetGame() {
 
     // Reset Magikarp — attach back to Golbat
     magikarp.visible = true;
-    magikarp.position.copy(golbat.position).add(new THREE.Vector3(0, -0.4, 0.5));
+    magikarp.position.copy(golbat.position).add(_tmpV5.set(0, -0.4, 0.5));
     magikarp.rotation.set(0, 0, Math.PI * 0.08);
 
     // Clear UI
@@ -192,23 +206,23 @@ function updateGameplay(dt) {
 
     // Fire glow
     fireLight.position.copy(charizard.position)
-        .add(new THREE.Vector3(0, 0.5, 0).addScaledVector(forward, 1.2));
+        .add(_tmpV1.set(0, 0.5, 0).addScaledVector(forward, 1.2));
 
     // Riding Pikachu — model already has Pikachu on Charizard's back baked in
     pikachuRiding.visible = true;
     pikachuRiding.position.copy(charizard.position)
-        .add(new THREE.Vector3(0, 0.7, 0.1).applyQuaternion(charizard.quaternion));
+        .add(_tmpV1.set(0, 0.7, 0.1).applyQuaternion(charizard.quaternion));
     pikachuRiding.rotation.copy(charizard.rotation);
 
     // ── Golbat velocity-based AI ──────────────────────────────────────────────
     // Golbat chases a target 20 m ahead + sinusoidal weave.
     // It has a capped max speed, so a fast-enough Charizard can actually catch it.
     golbatTimer += dt;
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(charizard.quaternion);
-    const desiredPos = charizard.position.clone()
+    const right = _tmpV1.set(1, 0, 0).applyQuaternion(charizard.quaternion);
+    const desiredPos = _tmpV2.copy(charizard.position)
         .addScaledVector(forward, 20)
         .addScaledVector(right, Math.sin(golbatTimer * 1.8) * 7)
-        .add(new THREE.Vector3(0, 3 + Math.cos(golbatTimer * 1.2) * 2, 0));
+        .add(_tmpV3.set(0, 3 + Math.cos(golbatTimer * 1.2) * 2, 0));
 
     const distToPlayer = charizard.position.distanceTo(golbat.position);
     const maxGolbatSpd = distToPlayer < GOLBAT_PANIC_DIST
@@ -216,7 +230,7 @@ function updateGameplay(dt) {
         : GOLBAT_FLEE_SPEED;
 
     // Steer toward desired position
-    const toDesired = desiredPos.clone().sub(golbat.position);
+    const toDesired = _tmpV4.copy(desiredPos).sub(golbat.position);
     if (toDesired.length() > 0.1) {
         golbatVelocity.addScaledVector(toDesired.normalize(), GOLBAT_ACCEL * dt);
     }
@@ -230,10 +244,11 @@ function updateGameplay(dt) {
 
     // Push Golbat away from obstacles — velocity push + hard position correction
     for (const obs of obstacles) {
-        const { collisionRadius, collisionHeight, isMountain } = obs.userData;
-        if (golbat.position.y > collisionHeight) continue;
         const odx = golbat.position.x - obs.position.x;
         const odz = golbat.position.z - obs.position.z;
+        if (odx * odx + odz * odz > GOLBAT_CULL_SQ) continue;
+        const { collisionRadius, collisionHeight, isMountain } = obs.userData;
+        if (golbat.position.y > collisionHeight) continue;
         const odist = Math.sqrt(odx * odx + odz * odz);
         const effR = isMountain
             ? collisionRadius * (1 - golbat.position.y / collisionHeight)
@@ -261,7 +276,7 @@ function updateGameplay(dt) {
     golbat.lookAt(charizard.position);
 
     // Magikarp dangles from Golbat during the chase
-    magikarp.position.copy(golbat.position).add(new THREE.Vector3(0, -0.4, 0.5));
+    magikarp.position.copy(golbat.position).add(_tmpV5.set(0, -0.4, 0.5));
     magikarp.rotation.z = Math.PI * 0.08 + Math.sin(golbatTimer * 4) * 0.12; // flop
 
     // ── Sludge bombs ──────────────────────────────────────────────────────────
@@ -281,7 +296,7 @@ function updateGameplay(dt) {
 
     // ── Golbat compass ────────────────────────────────────────────────────────
     {
-        const ndc = golbat.position.clone().project(camera);
+        const ndc = _tmpV6.copy(golbat.position).project(camera);
         const sx = ndc.z < 1 ?  ndc.x : -ndc.x;
         const sy = ndc.z < 1 ?  ndc.y : -ndc.y;
         const angle = Math.atan2(sx, sy); // clockwise from screen-up
@@ -311,10 +326,11 @@ function updateGameplay(dt) {
     {
         const py = charizard.position.y;
         for (const obs of obstacles) {
-            const { collisionRadius, collisionHeight, isMountain } = obs.userData;
-            if (py > collisionHeight) continue;
             const dx = charizard.position.x - obs.position.x;
             const dz = charizard.position.z - obs.position.z;
+            if (dx * dx + dz * dz > CHARIZARD_CULL_SQ) continue;
+            const { collisionRadius, collisionHeight, isMountain } = obs.userData;
+            if (py > collisionHeight) continue;
             const xzDist = Math.sqrt(dx * dx + dz * dz);
             const effR = isMountain
                 ? collisionRadius * (1 - py / collisionHeight)
@@ -357,10 +373,10 @@ function updateGameplay(dt) {
     updateClouds(charizard.position, dt);
 
     // ── Chase camera ──────────────────────────────────────────────────────────
-    const behindOffset    = new THREE.Vector3(0, 3, -6).applyQuaternion(charizard.quaternion);
-    const lookAheadOffset = new THREE.Vector3(0, 1,  2).applyQuaternion(charizard.quaternion);
-    camera.position.lerp(charizard.position.clone().add(behindOffset), 0.1);
-    camera.lookAt(charizard.position.clone().add(lookAheadOffset));
+    const behindOffset    = _tmpV1.set(0, 3, -6).applyQuaternion(charizard.quaternion);
+    const lookAheadOffset = _tmpV2.set(0, 1,  2).applyQuaternion(charizard.quaternion);
+    camera.position.lerp(_tmpV3.copy(charizard.position).add(behindOffset), 0.1);
+    camera.lookAt(_tmpV4.copy(charizard.position).add(lookAheadOffset));
 
     // ── HUD ───────────────────────────────────────────────────────────────────
     const displaySpeed = state.boostActive ? flySpeed : state.speed;

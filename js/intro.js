@@ -56,10 +56,10 @@ const phases = [
     {
         start: 0.8, end: 2.2,
         onEnter() { setTitle('Charizard found a Magikarp…'); },
-        update(t) {
+        update(t, elapsed) {
             // Magikarp flops in Charizard's grip
-            magikarp.position.set(0, 1.2 + Math.sin(Date.now() * 0.006) * 0.05, -0.55);
-            magikarp.rotation.z = Math.PI * 0.08 + Math.sin(Date.now() * 0.006) * 0.15;
+            magikarp.position.set(0, 1.2 + Math.sin(elapsed * 6) * 0.05, -0.55);
+            magikarp.rotation.z = Math.PI * 0.08 + Math.sin(elapsed * 6) * 0.15;
             camera.position.set(-4 + t * 1.2, 1.2 + t * 0.3, -5 + t * 0.8);
             camera.lookAt(0, 1.0, 0.6);
         },
@@ -70,9 +70,9 @@ const phases = [
     {
         start: 2.2, end: 2.8,
         onEnter() { setTitle('Dinner time. 🔥'); },
-        update() {
-            magikarp.position.set(0, 1.2 + Math.sin(Date.now() * 0.006) * 0.05, -0.55);
-            magikarp.rotation.z = Math.PI * 0.08 + Math.sin(Date.now() * 0.006) * 0.15;
+        update(t, elapsed) {
+            magikarp.position.set(0, 1.2 + Math.sin(elapsed * 6) * 0.05, -0.55);
+            magikarp.rotation.z = Math.PI * 0.08 + Math.sin(elapsed * 6) * 0.15;
         },
         onExit() { clearTitle(); },
     },
@@ -83,12 +83,12 @@ const phases = [
         onEnter() { setTitle('But Golbat swoops in!'); },
         _startPos: null,
         onEnterCapture() { this._startPos = golbat.position.clone(); },
-        update(t) {
+        update(t, elapsed) {
             const ease   = t * t * (3 - 2 * t);
             const target = new THREE.Vector3(0.2, 0.8, 1.5); // swoop toward Magikarp
             golbat.position.lerpVectors(this._startPos, target, ease);
             golbat.lookAt(magikarp.position);
-            magikarp.rotation.z = Math.PI * 0.08 + Math.sin(Date.now() * 0.006) * 0.15;
+            magikarp.rotation.z = Math.PI * 0.08 + Math.sin(elapsed * 6) * 0.15;
             camera.position.set(-2.8, 1.5, -4 + t * 1.5);
             camera.lookAt(0, 1.0, 0.6);
         },
@@ -105,13 +105,13 @@ const phases = [
         onEnter() { setTitle('It stole the Magikarp — CHASE IT!'); },
         _startGolbat: null,
         onEnterCapture() { this._startGolbat = golbat.position.clone(); },
-        update(t) {
+        update(t, elapsed) {
             const ease   = t * t * (3 - 2 * t);
             const target = new THREE.Vector3(0, 5, 18);
             golbat.position.lerpVectors(this._startGolbat, target, ease);
             // Magikarp travels with Golbat
             magikarp.position.copy(golbat.position).add(new THREE.Vector3(0, -0.4, 0.5));
-            magikarp.rotation.z = Math.PI * 0.08 + Math.sin(Date.now() * 0.01) * 0.3; // frantic flop
+            magikarp.rotation.z = Math.PI * 0.08 + Math.sin(elapsed * 10) * 0.3; // frantic flop
             // Camera tilts up to follow
             camera.position.set(-2, 2 + t * 2, -1 + t * 5);
             camera.lookAt(golbat.position);
@@ -172,7 +172,7 @@ export function updateIntro(dt) {
     }
 
     const t = (elapsed - phase.start) / (phase.end - phase.start);
-    if (phase.update) phase.update(Math.max(0, Math.min(1, t)));
+    if (phase.update) phase.update(Math.max(0, Math.min(1, t)), elapsed);
 
     return false;
 }

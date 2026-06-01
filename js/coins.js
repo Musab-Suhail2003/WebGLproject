@@ -18,6 +18,7 @@ export const coins = [];
 for (let i = 0; i < COIN_COUNT; i++) {
     const mesh = new THREE.Mesh(coinGeo, coinMat);
     mesh.castShadow = false;
+    mesh.userData.hiddenTimer = 0;
     // Scatter in a wide radius around origin, not too close to start
     const angle = (i / COIN_COUNT) * Math.PI * 2 + Math.random() * 0.4;
     const dist  = 15 + Math.random() * 50;
@@ -38,18 +39,9 @@ export function updateCoins(playerPos, dt) {
     let gained = 0;
 
     coins.forEach(coin => {
-        if (!coin.visible) return;
-
-        // Spin
-        coin.rotation.y += dt * 2.5;
-
-        // Collect
-        if (playerPos.distanceTo(coin.position) < COLLECT_DIST) {
-            coin.visible = false;
-            gained += BOOST_PER_COIN;
-
-            // Respawn the coin somewhere new after a short delay
-            setTimeout(() => {
+        if (!coin.visible) {
+            coin.userData.hiddenTimer += dt;
+            if (coin.userData.hiddenTimer >= 8) {
                 const angle = Math.random() * Math.PI * 2;
                 const dist  = 20 + Math.random() * 60;
                 coin.position.set(
@@ -58,9 +50,28 @@ export function updateCoins(playerPos, dt) {
                     playerPos.z + Math.sin(angle) * dist
                 );
                 coin.visible = true;
-            }, 8000);
+                coin.userData.hiddenTimer = 0;
+            }
+            return;
+        }
+
+        // Spin
+        coin.rotation.y += dt * 2.5;
+
+        // Collect
+        if (playerPos.distanceTo(coin.position) < COLLECT_DIST) {
+            coin.visible = false;
+            coin.userData.hiddenTimer = 0;
+            gained += BOOST_PER_COIN;
         }
     });
 
     return gained;
+}
+
+export function resetCoins() {
+    coins.forEach(coin => {
+        coin.visible = true;
+        coin.userData.hiddenTimer = 0;
+    });
 }

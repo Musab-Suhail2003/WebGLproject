@@ -9,11 +9,12 @@ scene.fog = new THREE.Fog(0x87CEEB, 60, 220);
 
 export const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-export const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 400);
+export const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 250);
 camera.position.set(0, 5, -8);
 
 // Sun + ambient
@@ -28,6 +29,7 @@ sunLight.shadow.camera.left = -40;
 sunLight.shadow.camera.right = 40;
 sunLight.shadow.camera.top = 40;
 sunLight.shadow.camera.bottom = -40;
+sunLight.shadow.bias = -0.0001;
 scene.add(sunLight);
 scene.add(new THREE.AmbientLight(0x404040));
 
@@ -51,5 +53,6 @@ window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     composer.setSize(window.innerWidth, window.innerHeight);
 });
