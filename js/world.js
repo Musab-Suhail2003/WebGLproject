@@ -57,11 +57,9 @@ function makeTree() {
     const trunk = new THREE.Mesh(geo.treeTrunk, mat.trunk);
     trunk.scale.y = h;
     trunk.position.y = h * 0.5;
-    trunk.castShadow = true;
     g.add(trunk);
     const top = new THREE.Mesh(geo.treeTop, mat.treeTop);
     top.position.y = h + 1.2;
-    top.castShadow = true;
     g.add(top);
     g.userData.type            = 'tree';
     g.userData.collisionRadius = 0.8;
@@ -78,7 +76,6 @@ function makeBoulder() {
     mesh.scale.set(scale, scale * 0.7, scale);
     mesh.rotation.y = Math.random() * Math.PI;
     mesh.position.y = scale * 0.7 * 0.5;
-    mesh.castShadow = true;
     g.add(mesh);
     g.userData.type            = 'boulder';
     g.userData.boulderScale    = scale;       // kept so GLB loader can match size
@@ -164,7 +161,6 @@ export function loadWorldAssets() {
             const template = gltf.scene;
             template.traverse(child => {
                 if (child.isMesh) {
-                    child.castShadow = true;
                     child.receiveShadow = true;
                     if (child.material) {
                         child.material.roughness = 1;
@@ -183,7 +179,6 @@ export function loadWorldAssets() {
                 obs.add(clone);
             });
 
-            console.log('rock.glb loaded — boulders upgraded');
             resolve();
         }, undefined, err => {
             console.warn('rock.glb failed, keeping procedural boulders', err);
@@ -216,7 +211,6 @@ export function loadWorldAssets() {
                 clouds.push(g);
             }
 
-            console.log('cloud.glb loaded');
             resolve();
         }, undefined, err => {
             console.warn('cloud.glb failed, using procedural clouds', err);
@@ -238,7 +232,6 @@ export function loadWorldAssets() {
             const template = gltf.scene;
             template.traverse(child => {
                 if (child.isMesh) {
-                    child.castShadow = true;
                     child.receiveShadow = true;
                     const old = child.material;
                     child.material = new THREE.MeshToonMaterial({
@@ -265,7 +258,6 @@ export function loadWorldAssets() {
                 obs.add(clone);
             });
 
-            console.log('tree.glb loaded — foliage upgraded');
             resolve();
         }, undefined, err => {
             console.warn('tree.glb failed, keeping procedural tops', err);
@@ -277,10 +269,15 @@ export function loadWorldAssets() {
 }
 
 // ── Per-frame updates ─────────────────────────────────────────────────────────
+const RECYCLE_DIST_SQ   = RECYCLE_DIST * RECYCLE_DIST;
+const CLOUD_RECYCLE_SQ  = 120 * 120;
+const _perpScratch      = new THREE.Vector3();
+const _newPosScratch    = new THREE.Vector3();
+
 export function updateClouds(playerPos, dt) {
     clouds.forEach((cloud, i) => {
         cloud.position.addScaledVector(cloud.userData.driftDir, cloud.userData.driftSpeed * dt);
-        if (playerPos.distanceTo(cloud.position) > 120) {
+        if (playerPos.distanceToSquared(cloud.position) > CLOUD_RECYCLE_SQ) {
             const { x, y, z } = spawnCloud(i, playerPos);
             cloud.position.set(x, y, z);
         }
@@ -288,17 +285,18 @@ export function updateClouds(playerPos, dt) {
 }
 
 export function recycleObstacles(playerPos, forward) {
-    const perp = new THREE.Vector3(-forward.z, 0, forward.x).normalize();
+    _perpScratch.set(-forward.z, 0, forward.x).normalize();
     obstacles.forEach(obs => {
-        const dx   = obs.position.x - playerPos.x;
-        const dz   = obs.position.z - playerPos.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist > RECYCLE_DIST) {
-            const ahead  = SPAWN_NEAR + Math.random() * (SPAWN_FAR - SPAWN_NEAR);
-            const side   = (Math.random() - 0.5) * SPREAD * 2;
-            const newPos = playerPos.clone().addScaledVector(forward, ahead).addScaledVector(perp, side);
-            newPos.y = 0;
-            obs.position.copy(newPos);
+        const dx = obs.position.x - playerPos.x;
+        const dz = obs.position.z - playerPos.z;
+        if (dx * dx + dz * dz > RECYCLE_DIST_SQ) {
+            const ahead = SPAWN_NEAR + Math.random() * (SPAWN_FAR - SPAWN_NEAR);
+            const side  = (Math.random() - 0.5) * SPREAD * 2;
+            _newPosScratch.copy(playerPos)
+                .addScaledVector(forward, ahead)
+                .addScaledVector(_perpScratch, side);
+            _newPosScratch.y = 0;
+            obs.position.copy(_newPosScratch);
         }
     });
 }

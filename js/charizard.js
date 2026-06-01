@@ -65,10 +65,7 @@ export function loadCharizard() {
                 if (gltf.animations.length > 0) {
                     mixer = new THREE.AnimationMixer(model);
                     mixer.clipAction(gltf.animations[0]).play();
-                    console.log(`Playing animation: "${gltf.animations[0].name}"`);
                 }
-
-                console.log('Charizard flying animation loaded');
                 resolve();
             },
             undefined,
@@ -131,7 +128,6 @@ export function loadStandingCharizard() {
                     }
                 });
                 standingCharizard.add(model);
-                console.log('Standing Charizard loaded');
                 resolve();
             },
             undefined,

@@ -51,7 +51,6 @@ export function loadpikachu() {
             model.rotation.x = Math.PI / 2;
             patchMaterials(model);
             pikachu.add(model);
-            console.log('pikachu.glb loaded');
             resolve();
         }, undefined, err => {
             console.warn('pikachu.glb failed', err);
@@ -74,7 +73,6 @@ export function loadpikachu() {
                 }
             });
             pikachuRiding.add(model);
-            console.log('pikachu-flying-on-charizard.glb loaded');
             resolve();
         }, undefined, err => {
             console.warn('pikachu-flying-on-charizard.glb failed', err);

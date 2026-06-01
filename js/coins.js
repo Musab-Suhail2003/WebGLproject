@@ -3,7 +3,8 @@ import { scene } from './scene.js';
 
 const COIN_COUNT    = 25;
 const COIN_RADIUS   = 0.4;
-const COLLECT_DIST  = 2.2;
+const COLLECT_DIST    = 2.2;
+const COLLECT_DIST_SQ = COLLECT_DIST * COLLECT_DIST;
 const BOOST_PER_COIN = 20;   // boost fuel added per coin collected
 
 // Glowing gold coin mesh
@@ -59,7 +60,7 @@ export function updateCoins(playerPos, dt) {
         coin.rotation.y += dt * 2.5;
 
         // Collect
-        if (playerPos.distanceTo(coin.position) < COLLECT_DIST) {
+        if (playerPos.distanceToSquared(coin.position) < COLLECT_DIST_SQ) {
             coin.visible = false;
             coin.userData.hiddenTimer = 0;
             gained += BOOST_PER_COIN;

@@ -46,7 +46,6 @@ export function loadGolbat() {
                     const mixer = new THREE.AnimationMixer(model);
                     mixer.clipAction(gltf.animations[0]).play();
                     golbat.userData.mixer = mixer;
-                    console.log(`Golbat animation: "${gltf.animations[0].name}"`);
                 } else {
                     // No skeletal anim — we'll drive wing-like meshes procedurally
                     const wings = [];
@@ -54,10 +53,7 @@ export function loadGolbat() {
                         if (obj.isMesh && /wing|ear|arm/i.test(obj.name)) wings.push(obj);
                     });
                     golbat.userData.wings = wings;
-                    console.log(`Golbat: no clip found, procedural wings: ${wings.length}`);
                 }
-
-                console.log('golbat.glb loaded');
                 resolve();
             },
             undefined,

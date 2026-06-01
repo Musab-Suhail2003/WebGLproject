@@ -27,7 +27,6 @@ export function loadMagikarp() {
                     }
                 });
                 magikarp.add(model);
-                console.log('magikarp.glb loaded');
                 resolve();
             },
             undefined,

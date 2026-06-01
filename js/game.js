@@ -36,6 +36,14 @@ const _tmpV3 = new THREE.Vector3();
 const _tmpV4 = new THREE.Vector3();
 const _tmpV5 = new THREE.Vector3();
 const _tmpV6 = new THREE.Vector3();
+const _fleeDirScratch = new THREE.Vector3();
+
+// HUD diff cache — only write DOM when values change
+let _hudSpeed       = -1;
+let _hudAlt         = -1;
+let _hudBoost       = -1;
+let _hudBoostActive = null;
+let _hudBoostReady  = null;
 
 // ── HUD elements (cached) ─────────────────────────────────────────────────────
 const elSpeed        = document.getElementById('speed');
@@ -258,10 +266,11 @@ function updateGameplay(dt) {
     for (const obs of obstacles) {
         const odx = golbat.position.x - obs.position.x;
         const odz = golbat.position.z - obs.position.z;
-        if (odx * odx + odz * odz > GOLBAT_CULL_SQ) continue;
+        const osq = odx * odx + odz * odz;
+        if (osq > GOLBAT_CULL_SQ) continue;
         const { collisionRadius, collisionHeight, isMountain } = obs.userData;
         if (golbat.position.y > collisionHeight) continue;
-        const odist = Math.sqrt(odx * odx + odz * odz);
+        const odist = Math.sqrt(osq);
         const effR = isMountain
             ? collisionRadius * (1 - golbat.position.y / collisionHeight)
             : collisionRadius;
@@ -340,10 +349,11 @@ function updateGameplay(dt) {
         for (const obs of obstacles) {
             const dx = charizard.position.x - obs.position.x;
             const dz = charizard.position.z - obs.position.z;
-            if (dx * dx + dz * dz > CHARIZARD_CULL_SQ) continue;
+            const sq = dx * dx + dz * dz;
+            if (sq > CHARIZARD_CULL_SQ) continue;
             const { collisionRadius, collisionHeight, isMountain } = obs.userData;
             if (py > collisionHeight) continue;
-            const xzDist = Math.sqrt(dx * dx + dz * dz);
+            const xzDist = Math.sqrt(sq);
             const effR = isMountain
                 ? collisionRadius * (1 - py / collisionHeight)
                 : collisionRadius;
@@ -390,15 +400,29 @@ function updateGameplay(dt) {
     camera.position.lerp(_tmpV3.copy(charizard.position).add(behindOffset), 0.1);
     camera.lookAt(_tmpV4.copy(charizard.position).add(lookAheadOffset));
 
-    // ── HUD ───────────────────────────────────────────────────────────────────
-    const displaySpeed = state.boostActive ? flySpeed : state.speed;
-    elSpeed.textContent    = displaySpeed.toFixed(1);
-    elAltitude.textContent = charizard.position.y.toFixed(1);
-    const boostPct = Math.round((state.boost / state.BOOST_MAX) * 100);
-    elBoostPct.textContent        = boostPct + '%';
-    elBoostBar.style.width        = boostPct + '%';
-    elBoostBar.style.background   = state.boostActive ? '#ff8800' : '#00ccff';
-    elBoostReady.style.display    = state.boost > 0 && !state.boostActive ? 'inline' : 'none';
+    // ── HUD (write DOM only when values change) ───────────────────────────────
+    const displaySpeed   = state.boostActive ? flySpeed : state.speed;
+    const hudSpeed       = +displaySpeed.toFixed(1);
+    const hudAlt         = +charizard.position.y.toFixed(1);
+    const boostPct       = Math.round((state.boost / state.BOOST_MAX) * 100);
+    const hudBoostActive = state.boostActive;
+    const hudBoostReady  = state.boost > 0 && !state.boostActive;
+
+    if (hudSpeed !== _hudSpeed) { elSpeed.textContent = hudSpeed.toFixed(1); _hudSpeed = hudSpeed; }
+    if (hudAlt   !== _hudAlt)   { elAltitude.textContent = hudAlt.toFixed(1); _hudAlt = hudAlt; }
+    if (boostPct !== _hudBoost) {
+        elBoostPct.textContent = boostPct + '%';
+        elBoostBar.style.width = boostPct + '%';
+        _hudBoost = boostPct;
+    }
+    if (hudBoostActive !== _hudBoostActive) {
+        elBoostBar.style.background = hudBoostActive ? '#ff8800' : '#00ccff';
+        _hudBoostActive = hudBoostActive;
+    }
+    if (hudBoostReady !== _hudBoostReady) {
+        elBoostReady.style.display = hudBoostReady ? 'inline' : 'none';
+        _hudBoostReady = hudBoostReady;
+    }
 }
 
 // ── Main loop ─────────────────────────────────────────────────────────────────
