@@ -1,0 +1,397 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2cm]{geometry}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{parskip}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{float}
+
+% ── Page style ────────────────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small CSE352 Computer Graphics}
+\chead{\small \textit{Final Project Report}}
+\rhead{\small Spring 2026}
+\cfoot{\small Page \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ── Section formatting ────────────────────────────────────────────────────────
+\titleformat{\section}{\normalfont\large\bfseries}{}{0em}{}[\titlerule]
+\titlespacing{\section}{0pt}{10pt}{4pt}
+
+% ── Table column types ────────────────────────────────────────────────────────
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+% ── Title block ───────────────────────────────────────────────────────────────
+\begin{center}
+    {\LARGE\bfseries Charizard's Chase: A WebGL Mini-Game}\\[4pt]
+    {\large Musab Suhail \quad|\quad ERP: \texttt{26923}}\\[2pt]
+    {\normalsize CSE352 Computer Graphics\quad--\quad Spring 2026}\\[2pt]
+    {\normalsize \textbf{Project Direction:} Mini Game (Pokémon-inspired)}
+\end{center}
+
+\vspace{-4pt}\noindent\rule{\linewidth}{0.6pt}\vspace{6pt}
+
+% ── 1. Final Summary ──────────────────────────────────────────────────────────
+\section{Final Summary}
+
+\textit{Charizard's Chase} is a fully playable, end-to-end WebGL mini-game built
+on Three.js r160 without any build tools, running directly in the browser via
+ES-module importmaps. The game has a complete narrative arc: an opening cutscene
+shows Charizard preparing to eat a Magikarp on a wooden table when Golbat swoops
+in and steals it; the player then chases Golbat through an infinite procedural
+world; catching Golbat triggers a closing cutscene in which Golbat and Magikarp
+land on a second (wider) table, Charizard stands before it, and cooks the
+Magikarp with a swelling flame effect.
+
+Core gameplay features include a velocity-based Golbat AI with panic behaviour, a
+coin-collection boost system, a three-heart health system with invincibility frames,
+sludge-bomb projectile attacks, and a full pause/retry menu. The world uses pooled
+GLB rock, cloud, and tree assets over an infinite tiling grass texture with
+world-space UV anchoring, and procedural cone mountains with tapered collision
+geometry. All three advanced techniques --- toon shading, post-processing bloom, and
+PCF shadow mapping --- are active and visible throughout.
+
+Since the progress report, the project received a full round of correctness fixes,
+rendering-quality improvements, and CPU/GPU performance optimisations detailed in
+Section~6.
+
+% ── 2. Baseline Techniques ───────────────────────────────────────────────────
+\section{Baseline Techniques Status}
+
+The four baseline techniques listed in the project proposal are all completed.
+
+\begin{tabular}{@{} L{3.5cm} L{2.2cm} L{8.8cm} @{}}
+\toprule
+\textbf{Technique} & \textbf{Status} & \textbf{Notes} \\
+\midrule
+Phong Lighting Model
+  & Completed
+  & \texttt{DirectionalLight} (sun, intensity 1.2) + \texttt{AmbientLight}
+    (fill) + \texttt{PointLight} (Charizard tail flame, repositioned every
+    frame). During the outro cooking scene the point light intensity ramps from
+    3 to 11 and its world position tracks the Magikarp on the table, producing a
+    visible heat-glow bloom pulse. \\[4pt]
+Texture Mapping
+  & Completed
+  & Grass diffuse texture (\texttt{grass\_diff\_1k.jpg}, 1K, Polyhaven CC0)
+    applied to the infinite ground plane with a repeat factor of 80 and a
+    world-space UV counter-offset each frame so the texture appears anchored to
+    world space rather than scrolling with the camera. GLB model diffuse
+    textures are preserved through the toon-material conversion via
+    \texttt{map} pass-through, satisfying the ``character surfaces'' requirement
+    from the proposal. \\[4pt]
+Multiple Light Sources
+  & Completed
+  & Three distinct types in simultaneous use: \texttt{DirectionalLight}
+    (sun/shadows), \texttt{AmbientLight} (fill), \texttt{PointLight}
+    (Charizard tail flame; directional fire, as proposed). Sludge bombs
+    additionally carry a per-bomb purple \texttt{PointLight}
+    (intensity 6, range 10). \\[4pt]
+Camera System
+  & Completed
+  & Third-person dynamic chase camera during gameplay (lerp-smoothed, 6 units
+    behind, 3 units above, with look-ahead), satisfying the proposal spec.
+    Supplemented with scripted cinematic cameras for the intro (low-angle drift,
+    swoop tracking) and outro (orbital descent, snap to table framing,
+    pullback). \\
+\bottomrule
+\end{tabular}
+
+\medskip
+\noindent\textit{Note on shaders:} Although not listed as a separate baseline
+item in the proposal, the Three.js rendering pipeline uses GLSL shaders
+internally for all passes. All mesh materials are \texttt{MeshToonMaterial}
+with \texttt{roughness=1}, \texttt{metalness=0}, and
+\texttt{envMapIntensity=0}, and the post-processing stack runs
+\texttt{UnrealBloomPass} as a full-screen GLSL quad. Scene-graph transformations
+(YXZ Euler yaw/pitch/roll for flight, quaternion-derived movement, Golbat
+procedural bank/pitch) and correct shadow normals via
+\texttt{PCFSoftShadowMap} are applied throughout.
+
+% ── 3. Advanced Techniques ───────────────────────────────────────────────────
+\section{Advanced Techniques Status}
+
+\textbf{Toon Shading (3/5) --- Completed.}
+\texttt{MeshToonMaterial} is applied to all geometry in the scene. All loaded
+GLB models (Charizard, Golbat, Magikarp, rocks, clouds, trees) have their
+PBR materials overwritten on load via a post-load \texttt{traverse} that sets
+\texttt{roughness = 1}, \texttt{metalness = 0}, and
+\texttt{envMapIntensity = 0} while preserving any diffuse \texttt{map} texture,
+ensuring a consistent flat, matte, cel-shaded look across both procedural and
+imported assets.
+\textit{Challenge:} PBR materials from GLB exports clashed with the toon
+aesthetic. Resolved with the post-load traverse approach.
+
+\medskip
+\textbf{Bloom (4/5) --- Completed.}
+\texttt{EffectComposer} with \texttt{UnrealBloomPass} (strength 0.8, radius 0.4,
+threshold 0.85). The tail flame mesh (\texttt{MeshToonMaterial}, emissive
+\texttt{0xff2200}) glows through bloom. Gold coins use emissive
+\texttt{0xFFAA00}. During the outro cooking scene the \texttt{PointLight}
+intensity is animated from 3 to 11 with its position locked above the Magikarp
+on the table, creating a visible bloom flare as the flame cooks the Magikarp in
+place.
+\textit{Challenge:} Bloom overexposed toon shading at high strength. Balanced
+by lowering strength and raising threshold.
+
+\medskip
+\textbf{Shadow Mapping (4/5) --- Completed.}
+\texttt{PCFSoftShadowMap} with a 1024\texttimes1024 depth map from the directional
+sun light; frustum manually sized (\(\pm40\) units, far 200). All characters,
+Magikarp, obstacles, and the intro/outro tables cast and receive shadows; the
+infinite ground plane receives them. Shadow bias has been tuned to
+\texttt{sunLight.shadow.bias = -0.0001} to eliminate acne on steep mountain
+slopes.
+
+\medskip
+\noindent Advanced technique effort scores: Toon Shading 3/5 + Bloom 4/5 +
+Shadow Mapping 4/5 = \textbf{11/10} \checkmark
+\quad(satisfies combined $\geq$ 6/10 and at least one technique $\geq$ 3/5).
+
+% ── 4. Cutscene Implementation ───────────────────────────────────────────────
+\section{Cutscene Implementation}
+
+Both cutscenes are driven by a phase-based timeline engine: each phase object
+carries \texttt{onEnter}, \texttt{onEnterCapture}, \texttt{update(t, elapsed)},
+and \texttt{onExit} callbacks. \texttt{t} is the normalised phase-local progress
+$[0,1]$ and \texttt{elapsed} is the running total since cutscene start. Smooth
+motion uses the cubic ease \(t^2(3-2t)\).
+
+\medskip
+\textbf{Intro (6 s, 6 phases).}
+The opening scene shows Charizard standing behind a wooden table on which
+a Magikarp is placed. The table is constructed entirely from Three.js primitives:
+a \texttt{BoxGeometry} (1.0 \texttimes{} 0.07 \texttimes{} 0.6) tabletop and four
+\texttt{CylinderGeometry} legs, all using \texttt{MeshToonMaterial} in a warm
+brown (\texttt{0x7a4e2d}), casting and receiving shadows. The Magikarp rests on
+the table surface at the correct world height and flops using a frame-synchronised
+sine animation driven by \texttt{elapsed} (replacing a previous
+\texttt{Date.now()} approach that caused jitter under FPS drops). Golbat swoops
+down from off-screen directly toward the table to snatch the Magikarp, which is
+then carried away as Golbat escapes.
+
+\medskip
+\textbf{Outro (7 s, 6 phases).}
+The victory cutscene uses a wider table (2.0 \texttimes{} 0.07 \texttimes{} 0.6),
+double the intro width, to accommodate both Golbat and Magikarp simultaneously.
+Golbat descends from the sky and lands on the table surface
+(computed as \texttt{TABLE\_SURFACE\_Y + golbatHalfHeight} from a run-time
+bounding-box measurement), with Charizard and Pikachu standing on the ground
+behind it facing the camera --- mirroring the intro composition. Once Golbat
+has settled, a cooking phase begins: the flame swells, a \texttt{PointLight}
+blooms above the Magikarp's fixed table position, and the camera pulls back to
+frame the entire scene.
+
+% ── 5. Screenshots ───────────────────────────────────────────────────────────
+\section{Screenshots / Renders}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.48\linewidth]{screenshot1}
+    \hfill
+    \includegraphics[width=0.48\linewidth]{screenshot2}
+    \\[6pt]
+    \includegraphics[width=0.48\linewidth]{screenshot3}
+    \hfill
+    \includegraphics[width=0.48\linewidth]{screenshot4}
+\end{figure}
+
+% ── 6. Technical Improvements & Optimisations ────────────────────────────────
+\section{Technical Improvements \& Optimisations}
+
+The following improvements were made after the progress report submission.
+
+\medskip
+\textbf{Bug Fixes.}
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+    \item \texttt{standingCharizard} was referenced in the Escape-key handler
+          without being imported, causing a \texttt{ReferenceError} crash when
+          pressing Escape to skip the intro. Fixed by adding it to the import.
+    \item Coin respawn used \texttt{setTimeout(8000)}, whose callbacks survived
+          \texttt{resetGame()} calls and fired 8~seconds after collection even
+          after a retry. Replaced with a per-coin \texttt{hiddenTimer} counter
+          incremented each frame; a new \texttt{resetCoins()} export resets all
+          timers and visibility on retry.
+    \item Magikarp flopping animations in the intro used \texttt{Date.now()}
+          wall-clock time, causing visual jitter under FPS drops and
+          desynchronisation from the \(t\)-based camera motion. All five
+          occurrences replaced with \texttt{elapsed} (the frame-synced running
+          time), which is now passed as a second argument to each phase's
+          \texttt{update(t, elapsed)} callback.
+\end{itemize}
+
+\medskip
+\textbf{Rendering Quality.}
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+    \item \texttt{sunLight.shadow.bias = -0.0001} added to eliminate shadow
+          acne on steep mountain faces (previously listed as remaining work).
+    \item Camera far plane reduced from 400 to 250 units. Scene fog ends at 220
+          units, so the previous 180-unit gap was rendering invisible geometry
+          every frame.
+    \item \texttt{renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))}
+          added at initialisation and in the resize handler, preventing 3\(\times\)
+          resolution rendering on high-DPI displays that previously halved
+          framerate.
+\end{itemize}
+
+\medskip
+\textbf{CPU / GC Performance.}
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+    \item \textbf{Scratch vectors:} Six module-level \texttt{THREE.Vector3}
+          instances (\texttt{\_tmpV1}--\texttt{\_tmpV6}) declared once and
+          reused throughout \texttt{updateGameplay()}. Previously, nine or more
+          \texttt{new THREE.Vector3()} calls per frame (fire glow, Golbat AI,
+          compass, camera) produced roughly 500 short-lived heap objects per
+          second, triggering frequent minor GC pauses. The \texttt{getCharizardForward()}
+          helper was similarly patched to reuse a module-level scratch.
+    \item \textbf{Collision loop culling:} Both the O(130) Golbat-obstacle
+          avoidance loop and the O(130) Charizard-collision loop now perform a
+          squared-distance fast-reject (\(\Delta x^2 + \Delta z^2 > 225\)) before
+          any \texttt{sqrt} or destructuring. In typical gameplay fewer than 15
+          obstacles pass the test, reducing per-frame collision work by
+          approximately 88\%.
+    \item \textbf{Shared sludge-bomb geometry:} \texttt{makeBomb()} previously
+          allocated a new \texttt{SphereGeometry}, \texttt{TorusGeometry}, and two
+          \texttt{MeshToonMaterial} instances every 4 seconds. These four objects
+          are now module-level singletons shared by all active bombs.
+\end{itemize}
+
+% ── 7. Challenges Encountered ────────────────────────────────────────────────
+\section{Challenges Encountered}
+
+A forward-vector orientation bug caused Charizard to fly sideways until a
+canonical \(+Z\) forward convention was established with quaternion-derived
+movement. Golbat's AI initially maintained a fixed offset regardless of player
+speed, making it uncatchable; replaced with a velocity-capped system so a boosted
+Charizard can close the gap. Tapered bounding-box collision against tall mountains
+caused phantom crashes far from the geometry; replaced with a per-type
+cylinder/tapered-cone check that matches each obstacle's visual shape.
+
+Placing cutscene models precisely on the table required computing
+\texttt{golbatHalfHeight} at runtime from a \texttt{Box3} measurement
+immediately after loading, since model origin points vary across GLB exports.
+This measurement drives the outro landing target
+(\texttt{TABLE\_SURFACE\_Y + golbatHalfHeight}) so Golbat's feet rest on the table
+surface regardless of the source model's coordinate system.
+
+Attaching the tail flame to the animated tail bone remains a positional offset
+rather than a bone-parented mesh, because the GLB skeleton lives inside
+\texttt{SkinnedMesh.skeleton.bones} rather than the scene graph traversal.
+
+% ── 8. Deferred Items ────────────────────────────────────────────────────────
+\section{Deferred Items}
+
+The following items were not completed within the project timeline:
+
+\begin{enumerate}[leftmargin=*, label=\arabic*.]
+    \item \textbf{Skybox / HDRI environment} --- the proposal's Week~1 plan
+          included a skybox. \texttt{kiara\_1\_dawn\_1k.hdr} (Polyhaven CC0) was
+          acquired but not integrated; the scene background remains a solid sky
+          colour (\texttt{0x87CEEB}) with matching linear fog to blend the
+          horizon. A proper HDRI skybox would replace the solid colour and
+          provide image-based ambient lighting.
+    \item \textbf{Custom GLSL pass} --- a toon-outline or ramp shader was planned
+          but deferred in favour of completing the cutscene narratives and
+          optimisation work. The Three.js \texttt{MeshToonMaterial} and
+          \texttt{UnrealBloomPass} built-in shaders fulfil the shading
+          requirements.
+    \item \textbf{Tail-flame bone parenting} --- the flame mesh uses a positional
+          offset from Charizard's root; skeletal attachment is non-trivial
+          because the GLB skeleton lives inside
+          \texttt{SkinnedMesh.skeleton.bones} rather than the traversable scene
+          graph.
+\end{enumerate}
+
+% ── 9. Scope Adjustments ─────────────────────────────────────────────────────
+\section{Scope Adjustments}
+
+\begin{tabular}{@{} L{4cm} L{10cm} @{}}
+\toprule
+\textbf{Change} & \textbf{Justification} \\
+\midrule
+Murkrow \(\rightarrow\) Golbat
+  & A suitably rigged Murkrow GLB was unavailable. Golbat fills the same
+    role and a quality rigged asset was sourced from Sketchfab. \\[4pt]
+Lighter/cigarette \(\rightarrow\) Magikarp
+  & Replaced the prop-theft premise with a food-theft premise for a more
+    visual and humorous payoff. Golbat steals Charizard's Magikarp from a
+    table; the outro shows Charizard cooking it on a second table. \\[4pt]
+Pikachu easter-egg
+  & Originally deferred; now fully integrated --- Pikachu appears beside
+    Charizard in both cutscenes and rides on Charizard's back during
+    gameplay via a dedicated \texttt{pikachu-flying-on-charizard.glb}. \\[4pt]
+Codebase architecture
+  & Single-file prototype split into twelve ES modules
+    (\texttt{scene}, \texttt{world}, \texttt{game}, \texttt{controls},
+    \texttt{charizard}, \texttt{golbat}, \texttt{magikarp}, \texttt{pikachu},
+    \texttt{sludge}, \texttt{coins}, \texttt{intro}, \texttt{outro}).
+    No techniques added or removed. \\[4pt]
+Pikachu source: Thangs $\rightarrow$ Sketchfab
+  & The Thangs asset was not suitable for the required riding animation.
+    A higher-quality rigged GLB was sourced from Sketchfab instead;
+    the asset is properly credited. Two Pikachu variants are used:
+    a standing model for cutscenes and a
+    \texttt{pikachu-flying-on-charizard.glb} riding model during gameplay. \\[4pt]
+Custom GLSL pass deferred
+  & Cutscene polish and performance work were prioritised. Three.js built-in
+    shaders satisfy the shading requirements. \\[4pt]
+Skybox deferred
+  & HDRI file acquired but not wired in; solid sky colour with matching fog
+    provides a visually consistent background. \\
+\bottomrule
+\end{tabular}
+
+% ── 10. External Assets ───────────────────────────────────────────────────────
+\section{External Assets}
+
+\begin{tabular}{@{} L{4.2cm} L{2.8cm} L{6.5cm} @{}}
+\toprule
+\textbf{Asset} & \textbf{Source} & \textbf{Credit / Link} \\
+\midrule
+Charizard flying animation GLB
+  & Sketchfab
+  & \url{https://skfb.ly/prsZz} \\[4pt]
+\texttt{charizard.glb} (standing)
+  & Sketchfab
+  & \url{https://skfb.ly/ouA78} \\[4pt]
+\texttt{golbat.glb}
+  & Sketchfab
+  & \url{https://skfb.ly/oPXDW} \\[4pt]
+\texttt{magikarp.glb}
+  & Sketchfab
+  & \url{https://skfb.ly/6ZXn9} \\[4pt]
+\texttt{pikachu.glb}
+  & Sketchfab
+  & \url{https://skfb.ly/pGUWE}
+    (proposed source was Thangs; replaced with Sketchfab asset) \\[4pt]
+\texttt{pikachu-flying-on-charizard.glb}
+  & Sketchfab
+  & \url{https://skfb.ly/p8NOI} \\[4pt]
+\texttt{grass\_diff\_1k.jpg}
+  & Polyhaven
+  & Polyhaven (CC0) \\[4pt]
+\texttt{kiara\_1\_dawn\_1k.hdr}
+  & Polyhaven
+  & Polyhaven (CC0) --- acquired, not integrated \\[4pt]
+\texttt{rock.glb, cloud.glb, tree.glb}
+  & Quaternius / itch.io
+  & Quaternius (CC0) \\
+\bottomrule
+\end{tabular}
+
+\medskip
+All Three.js library code is loaded from the \texttt{unpkg.com} CDN
+(Three.js r0.160.0, MIT licence). No other third-party runtime dependencies
+are used.
+
+\end{document}
