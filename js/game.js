@@ -136,6 +136,18 @@ function resetGame() {
 
 // ── Key & button listeners ────────────────────────────────────────────────────
 window.addEventListener('keydown', e => {
+    // Debug shortcut: O key jumps straight to the outro from intro or gameplay
+    if ((e.key === 'o' || e.key === 'O') && (phase === 'intro' || phase === 'playing')) {
+        resetIntro();
+        elHud.style.display = 'none';
+        elFade.style.transition = 'none';
+        elFade.style.opacity = '0';
+        elCutsceneTitle.classList.remove('visible');
+        phase = 'outro';
+        triggerOutro();
+        return;
+    }
+
     if (e.key !== 'Escape') return;
 
     if (phase === 'intro') {
@@ -276,7 +288,7 @@ function updateGameplay(dt) {
     golbat.lookAt(charizard.position);
 
     // Magikarp dangles from Golbat during the chase
-    magikarp.position.copy(golbat.position).add(_tmpV5.set(0, -0.4, 0.5));
+    magikarp.position.copy(golbat.position).add(_tmpV5.set(0, -0.4, 0.1));
     magikarp.rotation.z = Math.PI * 0.08 + Math.sin(golbatTimer * 4) * 0.12; // flop
 
     // ── Sludge bombs ──────────────────────────────────────────────────────────

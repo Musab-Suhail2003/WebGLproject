@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { camera } from './scene.js';
+import { camera, scene } from './scene.js';
 import { charizard, standingCharizard } from './charizard.js';
 import { golbat } from './golbat.js';
 import { magikarp } from './magikarp.js';
@@ -12,6 +12,31 @@ const hudEl   = document.getElementById('hud');
 
 function setTitle(text) { titleEl.textContent = text; titleEl.classList.add('visible'); }
 function clearTitle()   { titleEl.classList.remove('visible'); }
+
+// ── Intro table ───────────────────────────────────────────────────────────────
+// Simple wood table: flat BoxGeometry top + four CylinderGeometry legs.
+// Sits at z = -0.65 (in front of standing Charizard, toward the camera).
+// Table top surface is at world y ≈ 0.77.
+const tableMat = new THREE.MeshToonMaterial({ color: 0x7a4e2d });
+const introTable = new THREE.Group();
+
+const tableTop = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.07, 0.6), tableMat);
+tableTop.position.y = 0.735;
+tableTop.castShadow = true;
+tableTop.receiveShadow = true;
+introTable.add(tableTop);
+
+const legGeo = new THREE.CylinderGeometry(0.045, 0.05, 0.70, 8);
+for (const [lx, lz] of [[0.44, 0.25], [-0.44, 0.25], [0.44, -0.25], [-0.44, -0.25]]) {
+    const leg = new THREE.Mesh(legGeo, tableMat);
+    leg.position.set(lx, 0.35, lz);
+    leg.castShadow = true;
+    introTable.add(leg);
+}
+
+introTable.position.set(0, 0, -0.65);
+introTable.visible = false;
+scene.add(introTable);
 
 // ── Timeline ──────────────────────────────────────────────────────────────────
 const phases = [
@@ -34,9 +59,10 @@ const phases = [
             pikachu.position.set(0.9, 0, -0.2);
             pikachu.rotation.set(0, Math.PI, 0);
 
-            // Magikarp held in front of Charizard
+            // Table and Magikarp on top of it
+            introTable.visible = true;
             magikarp.visible = true;
-            magikarp.position.set(0, 1.2, -0.55);
+            magikarp.position.set(0, 0.80, -0.65);
             magikarp.rotation.set(0, 0, Math.PI * 0.08);
 
             // Golbat high up, out of frame initially
@@ -57,8 +83,8 @@ const phases = [
         start: 0.8, end: 2.2,
         onEnter() { setTitle('Charizard found a Magikarp…'); },
         update(t, elapsed) {
-            // Magikarp flops in Charizard's grip
-            magikarp.position.set(0, 1.2 + Math.sin(elapsed * 6) * 0.05, -0.55);
+            // Magikarp flops on the table
+            magikarp.position.set(0, 0.80 + Math.sin(elapsed * 6) * 0.03, -0.65);
             magikarp.rotation.z = Math.PI * 0.08 + Math.sin(elapsed * 6) * 0.15;
             camera.position.set(-4 + t * 1.2, 1.2 + t * 0.3, -5 + t * 0.8);
             camera.lookAt(0, 1.0, 0.6);
@@ -71,7 +97,7 @@ const phases = [
         start: 2.2, end: 2.8,
         onEnter() { setTitle('Dinner time. 🔥'); },
         update(t, elapsed) {
-            magikarp.position.set(0, 1.2 + Math.sin(elapsed * 6) * 0.05, -0.55);
+            magikarp.position.set(0, 0.80 + Math.sin(elapsed * 6) * 0.03, -0.65);
             magikarp.rotation.z = Math.PI * 0.08 + Math.sin(elapsed * 6) * 0.15;
         },
         onExit() { clearTitle(); },
@@ -85,7 +111,7 @@ const phases = [
         onEnterCapture() { this._startPos = golbat.position.clone(); },
         update(t, elapsed) {
             const ease   = t * t * (3 - 2 * t);
-            const target = new THREE.Vector3(0.2, 0.8, 1.5); // swoop toward Magikarp
+            const target = new THREE.Vector3(0.2, 1.1, -0.4); // swoop down to the table
             golbat.position.lerpVectors(this._startPos, target, ease);
             golbat.lookAt(magikarp.position);
             magikarp.rotation.z = Math.PI * 0.08 + Math.sin(elapsed * 6) * 0.15;
@@ -94,6 +120,7 @@ const phases = [
         },
         onExit() {
             clearTitle();
+            introTable.visible = false;
             // Magikarp is now "held" by Golbat — park it relative to Golbat
             magikarp.position.copy(golbat.position).add(new THREE.Vector3(0, -0.4, 0.5));
         },
@@ -147,6 +174,7 @@ let entered    = false;
 
 export function resetIntro() {
     elapsed = 0; phaseIndex = 0; entered = false;
+    introTable.visible = false;
 }
 
 export function updateIntro(dt) {
