@@ -3,6 +3,7 @@ import { camera } from './scene.js';
 import { charizard, standingCharizard } from './charizard.js';
 import { golbat } from './golbat.js';
 import { magikarp } from './magikarp.js';
+import { pikachu } from './pikachu.js';
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
 const titleEl = document.getElementById('cutscene-title');
@@ -27,6 +28,11 @@ const phases = [
             standingCharizard.visible = true;
             standingCharizard.position.set(0, 0, 0);
             standingCharizard.rotation.set(0, Math.PI, 0); // face camera
+
+            // Pikachu beside Charizard
+            pikachu.visible = true;
+            pikachu.position.set(0.9, 0, -0.2);
+            pikachu.rotation.set(0, Math.PI, 0);
 
             // Magikarp held in front of Charizard
             magikarp.visible = true;
@@ -127,6 +133,7 @@ const phases = [
         onExit() {
             standingCharizard.visible = false;
             charizard.visible         = true;
+            pikachu.visible           = false; // riding model takes over in gameplay
         },
     },
 ];

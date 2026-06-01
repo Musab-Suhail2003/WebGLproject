@@ -4,6 +4,7 @@ import { charizard, standingCharizard, flame } from './charizard.js';
 import { golbat } from './golbat.js';
 import { magikarp } from './magikarp.js';
 import { obstacles } from './world.js';
+import { pikachu, pikachuRiding } from './pikachu.js';
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
 const titleEl = document.getElementById('cutscene-title');
@@ -32,51 +33,95 @@ const phases = [
         onExit() { clearTitle(); },
     },
 
-    // 0.8 → 2.2 s : Golbat descends and "lands" (hovers low), camera orbits
+    // 0.8 → 2.2 s : Golbat + flying Charizard descend; blackout just before landing
     {
         start: 0.8, end: 2.2,
-        _center: null,
         _startGolbatY: null,
+        _startCharizardPos: null,
         onEnterCapture() {
-            this._center      = golbat.position.clone();
-            this._startGolbatY = golbat.position.y;
+            this._startGolbatY      = golbat.position.y;
+            this._startCharizardPos = charizard.position.clone();
+            charizard.visible     = true;
+            pikachuRiding.visible = true;
         },
         update(t) {
             const ease = t * t * (3 - 2 * t);
-            // Golbat descends so its bottom edge sits at y=0
-            golbat.position.y = THREE.MathUtils.lerp(this._startGolbatY, golbatHalfHeight/4, ease);
+
+            // Golbat descends to ground
+            golbat.position.y = THREE.MathUtils.lerp(this._startGolbatY, golbatHalfHeight / 4, ease);
             magikarp.position.copy(golbat.position).add(new THREE.Vector3(0, -0.4, 0.5));
-            // Orbit camera
+
+            // Flying Charizard + Pikachu descend with Golbat
+            charizard.position.set(
+                golbat.position.x,
+                golbat.position.y + golbatHalfHeight + 1.2,
+                golbat.position.z + 0.5
+            );
+            pikachuRiding.position.copy(charizard.position)
+                .add(new THREE.Vector3(0, 1.2, 0));
+            pikachuRiding.rotation.copy(charizard.rotation);
+
+            // Camera orbits around Golbat
             const angle  = t * Math.PI;
-            const center = new THREE.Vector3(golbat.position.x, 0.8, golbat.position.z);
+            const center = golbat.position.clone();
             camera.position.set(
                 center.x + Math.sin(angle) * 5,
                 center.y + 2,
                 center.z + Math.cos(angle) * 5
             );
             camera.lookAt(center);
+
+            // Quick blackout in the last 15% of the phase
+            if (t > 0.85) {
+                const bf = (t - 0.85) / 0.15;
+                fadeEl.style.transition = 'none';
+                fadeEl.style.opacity = String(bf);
+            }
         },
     },
 
-    // 2.2 → 3.2 s : standingCharizard appears on top of Golbat
+    // 2.2 → 3.2 s : blackout clears — everyone snaps to ground, standing models appear
     {
         start: 2.2, end: 3.2,
         onEnter() {
             setTitle('Charizard reclaims his meal!');
+
+            // Snap Golbat to ground
+            golbat.position.y = golbatHalfHeight / 4;
+            magikarp.position.copy(golbat.position).add(new THREE.Vector3(0, -0.4, 0.5));
+
+            // Swap flying → standing
             charizard.visible         = false;
+            pikachuRiding.visible     = false;
             standingCharizard.visible = true;
-            // Face forward, stay upright (Y-up)
             standingCharizard.rotation.set(0, Math.PI, 0);
+
+            const finalY = golbat.position.y + golbatHalfHeight;
+            standingCharizard.position.set(golbat.position.x, finalY, golbat.position.z);
+
+            pikachu.visible = true;
+            pikachu.rotation.set(0, Math.PI, 0);
+            pikachu.position.set(golbat.position.x + 0.7, finalY, golbat.position.z);
+
+            // Fade back in
+            fadeEl.style.transition = 'opacity 0.25s ease';
+            fadeEl.style.opacity    = '0';
         },
         update(t) {
-            // Sit Charizard on top of Golbat — top of Golbat + half Charizard height
+            // Hold position — no descent
             const targetY = golbat.position.y + golbatHalfHeight;
             standingCharizard.position.set(
                 golbat.position.x,
-                THREE.MathUtils.lerp(golbat.position.y + 4, targetY, t * t),
+                targetY,
                 golbat.position.z
             );
-            // Magikarp in front of standingCharizard (faces -z like in intro)
+            // Pikachu beside Charizard on Golbat's back
+            pikachu.position.set(
+                standingCharizard.position.x + 0.7,
+                standingCharizard.position.y,
+                standingCharizard.position.z
+            );
+            // Magikarp in front of standingCharizard
             magikarp.position.set(
                 standingCharizard.position.x,
                 standingCharizard.position.y + 1.2,
@@ -162,6 +207,14 @@ export function triggerOutro() {
     entered    = false;
     active     = true;
 
+    // Widen FOV for a more cinematic outro feel
+    camera.fov = 75;
+    camera.updateProjectionMatrix();
+
+    // Hide both pikachu models until the perch phase shows the standing one
+    pikachu.visible       = false;
+    pikachuRiding.visible = false;
+
     // Teleport back to intro location so outro plays at the same spot
     golbat.position.set(SCENE_ORIGIN.x, 8, SCENE_ORIGIN.z);
     magikarp.position.copy(golbat.position).add(new THREE.Vector3(0, -0.4, 0.5));
@@ -202,7 +255,12 @@ export function updateOutro(dt) {
         entered = false;
     }
 
-    if (phaseIndex >= phases.length) return true;
+    if (phaseIndex >= phases.length) {
+        // Restore default FOV
+        camera.fov = 50;
+        camera.updateProjectionMatrix();
+        return true;
+    }
 
     const phase = phases[phaseIndex];
     if (!entered) {

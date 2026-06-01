@@ -5,6 +5,7 @@ import { charizard, flame, loadCharizard, loadStandingCharizard, getCharizardFor
 import { golbat, golbatVelocity, loadGolbat, updateGolbat } from './golbat.js';
 import { coins, updateCoins } from './coins.js';
 import { magikarp, loadMagikarp } from './magikarp.js';
+import { pikachu, pikachuRiding, loadpikachu } from './pikachu.js';
 import { keys, state } from './controls.js';
 import { updateIntro, resetIntro } from './intro.js';
 import { updateOutro, triggerOutro } from './outro.js';
@@ -90,11 +91,13 @@ function resetGame() {
     clearSludge();
     elCompassRing.style.display = 'none';
 
-    // Reset Charizard
+    // Reset models
     charizard.visible = true;
     charizard.position.set(0, 3, 0);
     charizard.rotation.set(0, 0, 0);
     flame.scale.set(1, 1, 1);
+    pikachu.visible = false;
+    pikachuRiding.visible = false;
 
     // Reset Golbat
     golbat.position.set(0, 4, 20);
@@ -190,6 +193,12 @@ function updateGameplay(dt) {
     // Fire glow
     fireLight.position.copy(charizard.position)
         .add(new THREE.Vector3(0, 0.5, 0).addScaledVector(forward, 1.2));
+
+    // Riding Pikachu — model already has Pikachu on Charizard's back baked in
+    pikachuRiding.visible = true;
+    pikachuRiding.position.copy(charizard.position)
+        .add(new THREE.Vector3(0, 0.7, 0.1).applyQuaternion(charizard.quaternion));
+    pikachuRiding.rotation.copy(charizard.rotation);
 
     // ── Golbat velocity-based AI ──────────────────────────────────────────────
     // Golbat chases a target 20 m ahead + sinusoidal weave.
@@ -299,7 +308,7 @@ function updateGameplay(dt) {
     }
 
     // ── Obstacle collision ────────────────────────────────────────────────────
-    if (!state.invincible) {
+    {
         const py = charizard.position.y;
         for (const obs of obstacles) {
             const { collisionRadius, collisionHeight, isMountain } = obs.userData;
@@ -307,29 +316,30 @@ function updateGameplay(dt) {
             const dx = charizard.position.x - obs.position.x;
             const dz = charizard.position.z - obs.position.z;
             const xzDist = Math.sqrt(dx * dx + dz * dz);
-            const effR   = isMountain
+            const effR = isMountain
                 ? collisionRadius * (1 - py / collisionHeight)
                 : collisionRadius;
-            if (xzDist < effR + 0.4) {
-                // Push Charizard to the surface of the obstacle radially
-                const pushDist = effR + 0.6;
-                if (xzDist > 0.01) {
-                    charizard.position.x = obs.position.x + (dx / xzDist) * pushDist;
-                    charizard.position.z = obs.position.z + (dz / xzDist) * pushDist;
-                } else {
-                    charizard.position.x += pushDist;
+            const boundary = effR + 0.5;
+            if (xzDist < boundary) {
+                // Always push out — even during invincibility frames
+                const nx = xzDist > 0.01 ? dx / xzDist : 1;
+                const nz = xzDist > 0.01 ? dz / xzDist : 0;
+                charizard.position.x = obs.position.x + nx * boundary;
+                charizard.position.z = obs.position.z + nz * boundary;
+
+                // Damage only once per hit (not during invincibility)
+                if (!state.invincible) {
+                    state.hearts--;
+                    updateHeartsHUD();
+                    if (state.hearts <= 0) {
+                        state.gameOver = true;
+                        phase = 'gameover';
+                        showOverlay('💀 GAME OVER', false);
+                        return;
+                    }
+                    state.invincible      = true;
+                    state.invincibleTimer = 0;
                 }
-                state.hearts--;
-                updateHeartsHUD();
-                if (state.hearts <= 0) {
-                    state.gameOver = true;
-                    phase = 'gameover';
-                    showOverlay('💀 GAME OVER', false);
-                    return;
-                }
-                state.invincible      = true;
-                state.invincibleTimer = 0;
-                break;
             }
         }
     }
@@ -398,7 +408,7 @@ function animate() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
-Promise.all([loadCharizard(), loadStandingCharizard(), loadGolbat(), loadMagikarp(), loadWorldAssets()]).then(() => {
+Promise.all([loadCharizard(), loadStandingCharizard(), loadGolbat(), loadMagikarp(), loadpikachu(), loadWorldAssets()]).then(() => {
     elLoading.style.display = 'none';
     updateHeartsHUD();
     animate();
