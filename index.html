@@ -122,6 +122,79 @@
             color: transparent;
         }
         .heart-empty { color: #444; }
+        /* ── Catch mini-game overlay ── */
+        #catch-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: rgba(5, 0, 20, 0.82);
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+        }
+        .catch-card {
+            background: rgba(10, 5, 30, 0.96);
+            border: 2px solid #ff8c00;
+            border-radius: 10px;
+            padding: 14px 22px;
+            text-align: center;
+            min-width: 280px;
+            max-width: 340px;
+            box-shadow: 0 0 28px rgba(255,140,0,0.22);
+        }
+        #catch-title {
+            color: #ff8c00;
+            font-size: 1.1em;
+            font-weight: bold;
+            letter-spacing: 2px;
+            margin-bottom: 4px;
+        }
+        #catch-sub {
+            color: #bbb;
+            font-size: 0.75em;
+            margin-bottom: 12px;
+        }
+        #catch-sub kbd {
+            background: rgba(255,255,255,0.15);
+            border: 1px solid #666;
+            border-radius: 3px;
+            padding: 0px 4px;
+            color: #fff;
+            font-family: monospace;
+        }
+        .catch-bar-outer {
+            position: relative;
+            width: 100%;
+            height: 26px;
+            background: #111122;
+            border-radius: 13px;
+            overflow: hidden;
+            margin-bottom: 10px;
+            border: 1px solid #333;
+        }
+        #catch-zone {
+            position: absolute;
+            top: 0; bottom: 0;
+            background: rgba(0, 200, 70, 0.30);
+            border-left: 2px solid #00cc55;
+            border-right: 2px solid #00cc55;
+        }
+        #catch-indicator {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 0.95em;
+            text-shadow: 0 0 6px #fff, 0 0 14px #ffcc00;
+            pointer-events: none;
+        }
+        #catch-result {
+            font-size: 0.9em;
+            font-weight: bold;
+            min-height: 1.2em;
+            letter-spacing: 1px;
+        }
         /* ── Golbat compass ── */
         #compass-ring {
             position: absolute;
@@ -165,6 +238,17 @@
     <div id="msg"></div>
     <div id="cutscene-title"></div>
     <div id="fade"></div>
+    <div id="catch-overlay">
+        <div class="catch-card">
+            <div id="catch-title">🦇 GOLBAT IN RANGE!</div>
+            <div id="catch-sub">Press <kbd>SPACE</kbd> when the indicator hits the green zone</div>
+            <div class="catch-bar-outer">
+                <div id="catch-zone"></div>
+                <div id="catch-indicator">◆</div>
+            </div>
+            <div id="catch-result"></div>
+        </div>
+    </div>
     <div id="pause-overlay">
         <h1 id="pause-title">⏸ PAUSED</h1>
         <button class="pause-btn" id="btn-resume">▶ Resume</button>

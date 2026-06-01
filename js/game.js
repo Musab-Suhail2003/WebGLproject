@@ -12,10 +12,18 @@ import { updateOutro, triggerOutro } from './outro.js';
 import { updateSludge, clearSludge } from './sludge.js';
 
 // ── Golbat AI constants ───────────────────────────────────────────────────────
-const GOLBAT_FLEE_SPEED  = 10;  // comfortable cruising away from Charizard
-const GOLBAT_PANIC_SPEED = 14;  // when Charizard closes within PANIC_DIST
+const GOLBAT_FLEE_SPEED  = 10;
+const GOLBAT_PANIC_SPEED = 14;
 const GOLBAT_PANIC_DIST  = 10;
-const GOLBAT_ACCEL       = 9;   // how fast Golbat adjusts its velocity
+const GOLBAT_ACCEL       = 9;
+
+// ── Catch mini-game constants ─────────────────────────────────────────────────
+const CATCH_RANGE        = 1.5;   // world-unit radius that triggers the mini-game
+const CATCH_ZONE_CENTER  = 0.5;   // centre of the catch zone on the 0-1 bar
+// Per-miss difficulty: zone width and indicator speed (both shrink/grow on misses)
+const CATCH_ZONE_WIDTHS  = [0.16, 0.11, 0.07];
+const CATCH_SPEEDS       = [0.65, 0.85, 1.1];
+const CATCH_ESCAPE_SECS  = 3.0;   // panic-flee window after a miss
 
 // Squared-distance culling radii for collision loops — obstacles beyond this
 // distance cannot possibly overlap, so skip them before computing sqrt
@@ -28,6 +36,13 @@ let paused = false;
 
 const clock     = new THREE.Clock();
 let golbatTimer = 0;
+
+// ── Catch mini-game state ─────────────────────────────────────────────────────
+let catchMissCount   = 0;   // total misses so far (determines difficulty)
+let catchEscapeTimer = 0;   // seconds until catch range re-activates after a miss
+let catchActive      = false;
+let catchIndicPos    = 0.1; // indicator position 0..1 on bar
+let catchIndicDir    = 1;
 
 // Scratch vectors — reused every frame to avoid GC pressure
 const _tmpV1 = new THREE.Vector3();
@@ -53,6 +68,10 @@ const elFade          = document.getElementById('fade');
 const elCutsceneTitle = document.getElementById('cutscene-title');
 const elLoading       = document.getElementById('loading');
 const elCompassRing   = document.getElementById('compass-ring');
+const elCatchOverlay  = document.getElementById('catch-overlay');
+const elCatchZone     = document.getElementById('catch-zone');
+const elCatchIndicator = document.getElementById('catch-indicator');
+const elCatchResult   = document.getElementById('catch-result');
 
 function updateHeartsHUD() {
     let html = '';
@@ -86,6 +105,58 @@ function setPaused(val) {
     else     hideOverlay();
 }
 
+// ── Catch mini-game functions ─────────────────────────────────────────────────
+function startCatchGame() {
+    catchActive   = true;
+    catchIndicPos = 0.1;
+    catchIndicDir = 1;
+    const d = Math.min(catchMissCount, CATCH_ZONE_WIDTHS.length - 1);
+    const halfW = CATCH_ZONE_WIDTHS[d] / 2;
+    elCatchZone.style.left  = `${(CATCH_ZONE_CENTER - halfW) * 100}%`;
+    elCatchZone.style.width = `${CATCH_ZONE_WIDTHS[d] * 100}%`;
+    elCatchResult.textContent = '';
+    elCatchResult.style.color = '';
+    elCatchOverlay.style.display = 'flex';
+    elHud.style.display = 'none';
+}
+
+function stopCatchGame(caught) {
+    catchActive = false;
+    if (caught) {
+        elCatchResult.textContent = '🎉 CAUGHT IT!';
+        elCatchResult.style.color = '#00ff88';
+        setTimeout(() => {
+            elCatchOverlay.style.display = 'none';
+            elHud.style.display = '';
+            catchMissCount = 0;
+            phase = 'outro';
+            triggerOutro();
+        }, 600);
+    } else {
+        elCatchResult.textContent = '💨 MISSED — Golbat fled!';
+        elCatchResult.style.color = '#ff5555';
+        setTimeout(() => {
+            elCatchOverlay.style.display = 'none';
+            elHud.style.display = '';
+            catchMissCount = Math.min(catchMissCount + 1, CATCH_ZONE_WIDTHS.length - 1);
+            catchEscapeTimer = CATCH_ESCAPE_SECS;
+            // Flee impulse away from Charizard
+            const fleeDir = new THREE.Vector3().copy(golbat.position).sub(charizard.position).normalize();
+            golbatVelocity.copy(fleeDir).multiplyScalar(GOLBAT_PANIC_SPEED * 1.5);
+            phase = 'playing';
+        }, 600);
+    }
+}
+
+function updateCatchGame(dt) {
+    if (!catchActive) return;
+    const d = Math.min(catchMissCount, CATCH_SPEEDS.length - 1);
+    catchIndicPos += catchIndicDir * CATCH_SPEEDS[d] * dt;
+    if (catchIndicPos >= 1) { catchIndicPos = 1; catchIndicDir = -1; }
+    else if (catchIndicPos <= 0) { catchIndicPos = 0; catchIndicDir = 1; }
+    elCatchIndicator.style.left = `${catchIndicPos * 100}%`;
+}
+
 // ── Reset / retry (skipIntro = true jumps straight to playing) ────────────────
 function resetGame() {
     // Reset state
@@ -99,7 +170,11 @@ function resetGame() {
     state.yaw = 0; state.pitch = 0; state.roll = 0;
     state.speed = 5;
 
-    golbatTimer = 0;
+    golbatTimer      = 0;
+    catchMissCount   = 0;
+    catchEscapeTimer = 0;
+    catchActive      = false;
+    elCatchOverlay.style.display = 'none';
     golbatVelocity.set(0, 0, 0);
     clearSludge();
     resetCoins();
@@ -136,6 +211,14 @@ function resetGame() {
 
 // ── Key & button listeners ────────────────────────────────────────────────────
 window.addEventListener('keydown', e => {
+    // Catch mini-game — Space to throw Poké Ball
+    if (e.code === 'Space' && phase === 'catching' && catchActive) {
+        const d = Math.min(catchMissCount, CATCH_ZONE_WIDTHS.length - 1);
+        const halfW = CATCH_ZONE_WIDTHS[d] / 2;
+        stopCatchGame(Math.abs(catchIndicPos - CATCH_ZONE_CENTER) < halfW);
+        return;
+    }
+
     // Debug shortcut: O key jumps straight to the outro from intro or gameplay
     if ((e.key === 'o' || e.key === 'O') && (phase === 'intro' || phase === 'playing')) {
         resetIntro();
@@ -163,6 +246,7 @@ window.addEventListener('keydown', e => {
         elFade.style.opacity = '0';
         elCutsceneTitle.classList.remove('visible');
         elHud.style.display = '';
+        catchEscapeTimer = 2.0; // grace period so catch doesn't fire at spawn
         phase = 'playing';
     } else if (phase === 'outro') {
         // Skip outro — jump straight to win screen
@@ -373,9 +457,11 @@ function updateGameplay(dt) {
     }
 
     // ── Catch Golbat ──────────────────────────────────────────────────────────
-    if (distToPlayer < 0.5) {
-        phase = 'outro';
-        triggerOutro();
+    if (catchEscapeTimer > 0) {
+        catchEscapeTimer = Math.max(0, catchEscapeTimer - dt);
+    } else if (distToPlayer < CATCH_RANGE) {
+        phase = 'catching';
+        startCatchGame();
         return;
     }
 
@@ -418,11 +504,13 @@ function animate() {
             charizard.position.set(0, 3, 0);
             charizard.rotation.set(0, 0, 0);
             state.yaw = 0; state.pitch = 0; state.roll = 0;
-            // Make sure Magikarp is attached to Golbat for gameplay
             magikarp.visible = true;
+            catchEscapeTimer = 2.0; // grace period so catch doesn't fire at spawn
         }
     } else if (phase === 'playing') {
         updateGameplay(dt);
+    } else if (phase === 'catching') {
+        updateCatchGame(dt);
     } else if (phase === 'outro') {
         elCompassRing.style.display = 'none';
         const won = updateOutro(dt);
